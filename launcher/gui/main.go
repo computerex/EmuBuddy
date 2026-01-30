@@ -277,8 +277,33 @@ func main() {
 	}
 
 	appState.buildUI()
+	appState.showDisclaimer()
 	go appState.pollController()
 	myWindow.ShowAndRun()
+}
+
+func (a *App) showDisclaimer() {
+	disclaimerText := `LEGAL DISCLAIMER
+
+EmuBuddy is a game launcher and does not include any copyrighted game files.
+
+• We do not condone or encourage piracy
+• You are solely responsible for ensuring you have the legal right to any games you use with this software
+• Only use games that you legally own or have permission to use
+• Downloading copyrighted games without authorization is illegal in most jurisdictions
+
+By using this software, you acknowledge that you understand and accept these terms.`
+
+	content := widget.NewLabel(disclaimerText)
+	content.Wrapping = fyne.TextWrapWord
+	
+	d := dialog.NewCustomConfirm("Legal Notice", "I Understand", "Exit", content, func(accepted bool) {
+		if !accepted {
+			a.window.Close()
+		}
+	}, a.window)
+	d.Resize(fyne.NewSize(500, 350))
+	d.Show()
 }
 
 func (a *App) buildUI() {

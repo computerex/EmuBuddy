@@ -11,9 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -24,25 +22,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/0xcafed00d/joystick"
 )
-
-var (
-	user32                  = syscall.NewLazyDLL("user32.dll")
-	procGetForegroundWindow = user32.NewProc("GetForegroundWindow")
-	procGetWindowTextW      = user32.NewProc("GetWindowTextW")
-)
-
-func isWindowFocused(windowTitle string) bool {
-	hwnd, _, _ := procGetForegroundWindow.Call()
-	if hwnd == 0 {
-		return false
-	}
-	
-	buf := make([]uint16, 256)
-	procGetWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), 256)
-	title := syscall.UTF16ToString(buf)
-	
-	return strings.Contains(title, windowTitle)
-}
 
 // Debug logging
 var debugLog *os.File

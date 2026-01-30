@@ -237,9 +237,15 @@ if exist EmuBuddySetup-linux copy /y EmuBuddySetup-linux dist\EmuBuddy-Linux-%VE
 copy /y systems.json dist\EmuBuddy-Linux-%VERSION%\ >nul
 copy /y README.md dist\EmuBuddy-Linux-%VERSION%\ >nul
 xcopy /s /e /q 1g1rsets\*.json dist\EmuBuddy-Linux-%VERSION%\1g1rsets\ >nul
-echo #!/bin/bash> dist\EmuBuddy-Linux-%VERSION%\run.sh
-echo chmod +x EmuBuddyLauncher-linux EmuBuddySetup-linux 2^>/dev/null>> dist\EmuBuddy-Linux-%VERSION%\run.sh
-echo ./EmuBuddyLauncher-linux>> dist\EmuBuddy-Linux-%VERSION%\run.sh
+:: Create launcher scripts for Linux
+echo #!/bin/bash> "dist\EmuBuddy-Linux-%VERSION%\start-emubuddy.sh"
+echo cd "$(dirname "$0")">> "dist\EmuBuddy-Linux-%VERSION%\start-emubuddy.sh"
+echo chmod +x EmuBuddyLauncher-linux EmuBuddySetup-linux 2^>/dev/null>> "dist\EmuBuddy-Linux-%VERSION%\start-emubuddy.sh"
+echo ./EmuBuddyLauncher-linux>> "dist\EmuBuddy-Linux-%VERSION%\start-emubuddy.sh"
+echo #!/bin/bash> "dist\EmuBuddy-Linux-%VERSION%\run-setup.sh"
+echo cd "$(dirname "$0")">> "dist\EmuBuddy-Linux-%VERSION%\run-setup.sh"
+echo chmod +x EmuBuddySetup-linux 2^>/dev/null>> "dist\EmuBuddy-Linux-%VERSION%\run-setup.sh"
+echo ./EmuBuddySetup-linux>> "dist\EmuBuddy-Linux-%VERSION%\run-setup.sh"
 cd dist
 powershell -Command "Compress-Archive -Path 'EmuBuddy-Linux-%VERSION%\*' -DestinationPath 'EmuBuddy-Linux-%VERSION%.zip' -Force"
 rmdir /s /q EmuBuddy-Linux-%VERSION%
@@ -256,9 +262,15 @@ if exist EmuBuddySetup-macos copy /y EmuBuddySetup-macos dist\EmuBuddy-macOS-%VE
 copy /y systems.json dist\EmuBuddy-macOS-%VERSION%\ >nul
 copy /y README.md dist\EmuBuddy-macOS-%VERSION%\ >nul
 xcopy /s /e /q 1g1rsets\*.json dist\EmuBuddy-macOS-%VERSION%\1g1rsets\ >nul
-echo #!/bin/bash> dist\EmuBuddy-macOS-%VERSION%\run.sh
-echo chmod +x EmuBuddyLauncher-macos EmuBuddySetup-macos 2^>/dev/null>> dist\EmuBuddy-macOS-%VERSION%\run.sh
-echo ./EmuBuddyLauncher-macos>> dist\EmuBuddy-macOS-%VERSION%\run.sh
+:: Create double-clickable .command files for macOS
+echo #!/bin/bash> "dist\EmuBuddy-macOS-%VERSION%\Start EmuBuddy.command"
+echo cd "$(dirname "$0")">> "dist\EmuBuddy-macOS-%VERSION%\Start EmuBuddy.command"
+echo chmod +x EmuBuddyLauncher-macos EmuBuddySetup-macos 2^>/dev/null>> "dist\EmuBuddy-macOS-%VERSION%\Start EmuBuddy.command"
+echo ./EmuBuddyLauncher-macos>> "dist\EmuBuddy-macOS-%VERSION%\Start EmuBuddy.command"
+echo #!/bin/bash> "dist\EmuBuddy-macOS-%VERSION%\Run Setup.command"
+echo cd "$(dirname "$0")">> "dist\EmuBuddy-macOS-%VERSION%\Run Setup.command"
+echo chmod +x EmuBuddySetup-macos 2^>/dev/null>> "dist\EmuBuddy-macOS-%VERSION%\Run Setup.command"
+echo ./EmuBuddySetup-macos>> "dist\EmuBuddy-macOS-%VERSION%\Run Setup.command"
 cd dist
 powershell -Command "Compress-Archive -Path 'EmuBuddy-macOS-%VERSION%\*' -DestinationPath 'EmuBuddy-macOS-%VERSION%.zip' -Force"
 rmdir /s /q EmuBuddy-macOS-%VERSION%

@@ -5,9 +5,14 @@
       "name": "Nintendo Entertainment System",
       "dir": "nes",
       "romJsonFile": "nes.json",
+      "libretroName": "Nintendo - Nintendo Entertainment System",
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/nestopia_libretro.dll"],
+        "cores": [
+          {"name": "Nestopia", "dll": "cores/nestopia_libretro.dll"},
+          {"name": "FCEUmm", "dll": "cores/fceumm_libretro.dll"},
+          {"name": "Mesen", "dll": "cores/mesen_libretro.dll"}
+        ],
         "name": "RetroArch"
       },
       "standaloneEmulator": null,
@@ -19,9 +24,14 @@
       "name": "Super Nintendo",
       "dir": "snes",
       "romJsonFile": "snes.json",
+      "libretroName": "Nintendo - Super Nintendo Entertainment System",
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/snes9x_libretro.dll"],
+        "cores": [
+          {"name": "Snes9x", "dll": "cores/snes9x_libretro.dll"},
+          {"name": "bsnes", "dll": "cores/bsnes_libretro.dll"},
+          {"name": "Mesen-S", "dll": "cores/mesen-s_libretro.dll"}
+        ],
         "name": "RetroArch"
       },
       "standaloneEmulator": null,
@@ -33,9 +43,13 @@
       "name": "Nintendo 64",
       "dir": "n64",
       "romJsonFile": "n64.json",
+      "libretroName": "Nintendo - Nintendo 64",
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/mupen64plus_next_libretro.dll"],
+        "cores": [
+          {"name": "Mupen64Plus-Next", "dll": "cores/mupen64plus_next_libretro.dll"},
+          {"name": "ParaLLEl N64", "dll": "cores/parallel_n64_libretro.dll"}
+        ],
         "name": "RetroArch"
       },
       "standaloneEmulator": null,
@@ -47,9 +61,14 @@
       "name": "Game Boy",
       "dir": "gb",
       "romJsonFile": "gb.json",
+      "libretroName": "Nintendo - Game Boy",
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/gambatte_libretro.dll"],
+        "cores": [
+          {"name": "Gambatte", "dll": "cores/gambatte_libretro.dll"},
+          {"name": "SameBoy", "dll": "cores/sameboy_libretro.dll"},
+          {"name": "mGBA", "dll": "cores/mgba_libretro.dll"}
+        ],
         "name": "RetroArch"
       },
       "standaloneEmulator": null,
@@ -61,9 +80,14 @@
       "name": "Game Boy Color",
       "dir": "gbc",
       "romJsonFile": "gbc.json",
+      "libretroName": "Nintendo - Game Boy Color",
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/gambatte_libretro.dll"],
+        "cores": [
+          {"name": "Gambatte", "dll": "cores/gambatte_libretro.dll"},
+          {"name": "SameBoy", "dll": "cores/sameboy_libretro.dll"},
+          {"name": "mGBA", "dll": "cores/mgba_libretro.dll"}
+        ],
         "name": "RetroArch"
       },
       "standaloneEmulator": null,
@@ -75,9 +99,14 @@
       "name": "Game Boy Advance",
       "dir": "gba",
       "romJsonFile": "gba.json",
+      "libretroName": "Nintendo - Game Boy Advance",
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/mgba_libretro.dll"],
+        "cores": [
+          {"name": "mGBA", "dll": "cores/mgba_libretro.dll"},
+          {"name": "VBA-M", "dll": "cores/vbam_libretro.dll"},
+          {"name": "VBA Next", "dll": "cores/vba_next_libretro.dll"}
+        ],
         "name": "RetroArch"
       },
       "standaloneEmulator": {
@@ -93,15 +122,19 @@
       "name": "Nintendo DS",
       "dir": "ds",
       "romJsonFile": "ds.json",
+      "libretroName": "Nintendo - Nintendo DS",
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/melonds_libretro.dll"],
+        "cores": [
+          {"name": "melonDS", "dll": "cores/melonds_libretro.dll"},
+          {"name": "DeSmuME", "dll": "cores/desmume_libretro.dll"}
+        ],
         "name": "RetroArch"
       },
       "standaloneEmulator": {
         "path": "Emulators/DeSmuME/DeSmuME_0.9.13_x64.exe",
         "args": [],
-        "name": "DeSmuME"
+        "name": "DeSmuME Standalone"
       },
       "fileExtensions": [".nds", ".zip"],
       "needsExtract": true
@@ -111,15 +144,20 @@
       "name": "Nintendo 3DS",
       "dir": "3ds",
       "romJsonFile": "3ds.json",
+      "libretroName": "Nintendo - Nintendo 3DS",
       "emulator": {
-        "path": "Emulators/Lime3DS/azahar.exe",
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
         "args": [],
-        "name": "Lime3DS (Azahar)"
+        "cores": [
+          {"name": "Citra", "dll": "cores/citra_libretro.dll"}
+        ],
+        "name": "RetroArch"
       },
       "standaloneEmulator": {
-        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/citra_libretro.dll"],
-        "name": "RetroArch (Citra)"
+        "path": "Emulators/Lime3DS/azahar.exe",
+        "args": [],
+        "cores": [],
+        "name": "Lime3DS (Azahar)"
       },
       "fileExtensions": [".3ds", ".cci", ".cxi", ".app"],
       "needsExtract": true
@@ -129,6 +167,7 @@
       "name": "GameCube",
       "dir": "gc",
       "romJsonFile": "gc.json",
+      "libretroName": "Nintendo - GameCube",
       "emulator": {
         "path": "Emulators/Dolphin/Dolphin-x64/Dolphin.exe",
         "args": ["-e"],
@@ -143,6 +182,7 @@
       "name": "Wii",
       "dir": "wii",
       "romJsonFile": "wii.json",
+      "libretroName": "Nintendo - Wii",
       "emulator": {
         "path": "Emulators/Dolphin/Dolphin-x64/Dolphin.exe",
         "args": ["-e"],
@@ -157,15 +197,19 @@
       "name": "PlayStation Portable",
       "dir": "psp",
       "romJsonFile": "psp.json",
+      "libretroName": "Sony - PlayStation Portable",
       "emulator": {
-        "path": "Emulators/PPSSPP/PPSSPPWindows64.exe",
-        "args": [],
-        "name": "PPSSPP"
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "PPSSPP", "dll": "cores/ppsspp_libretro.dll"}
+        ],
+        "name": "RetroArch"
       },
       "standaloneEmulator": {
-        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/ppsspp_libretro.dll"],
-        "name": "RetroArch (PPSSPP)"
+        "path": "Emulators/PPSSPP/PPSSPPWindows64.exe",
+        "args": [],
+        "cores": [],
+        "name": "PPSSPP Standalone"
       },
       "fileExtensions": [".iso", ".cso", ".pbp"],
       "needsExtract": true
@@ -175,9 +219,14 @@
       "name": "PlayStation 1",
       "dir": "ps1",
       "romJsonFile": "ps1.json",
+      "libretroName": "Sony - PlayStation",
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/mednafen_psx_hw_libretro.dll"],
+        "cores": [
+          {"name": "Beetle PSX HW", "dll": "cores/mednafen_psx_hw_libretro.dll"},
+          {"name": "PCSX ReARMed", "dll": "cores/pcsx_rearmed_libretro.dll"},
+          {"name": "SwanStation", "dll": "cores/swanstation_libretro.dll"}
+        ],
         "name": "RetroArch"
       },
       "standaloneEmulator": null,
@@ -189,6 +238,7 @@
       "name": "PlayStation 2",
       "dir": "ps2",
       "romJsonFile": "ps2.json",
+      "libretroName": "Sony - PlayStation 2",
       "emulator": {
         "path": "Emulators/PCSX2/pcsx2-qt.exe",
         "args": [],
@@ -203,14 +253,248 @@
       "name": "Dreamcast",
       "dir": "dreamcast",
       "romJsonFile": "dreamcast.json",
+      "libretroName": "Sega - Dreamcast",
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
-        "args": ["-L", "cores/flycast_libretro.dll"],
+        "cores": [
+          {"name": "Flycast", "dll": "cores/flycast_libretro.dll"},
+          {"name": "Flycast GLES2", "dll": "cores/flycast_gles2_libretro.dll"}
+        ],
         "name": "RetroArch"
       },
       "standaloneEmulator": null,
       "fileExtensions": [".chd", ".cdi", ".gdi", ".cue"],
       "needsExtract": true
+    },
+    {
+      "id": "genesis",
+      "name": "Sega Genesis / Mega Drive",
+      "dir": "genesis",
+      "romJsonFile": "games_1g1r_english_genesis.json",
+      "libretroName": "Sega - Mega Drive - Genesis",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "Genesis Plus GX", "dll": "cores/genesis_plus_gx_libretro.dll"},
+          {"name": "PicoDrive", "dll": "cores/picodrive_libretro.dll"},
+          {"name": "BlastEm", "dll": "cores/blastem_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".md", ".bin", ".gen", ".smd", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "sms",
+      "name": "Sega Master System",
+      "dir": "sms",
+      "romJsonFile": "games_1g1r_english_sms.json",
+      "libretroName": "Sega - Master System - Mark III",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "Genesis Plus GX", "dll": "cores/genesis_plus_gx_libretro.dll"},
+          {"name": "PicoDrive", "dll": "cores/picodrive_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".sms", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "gamegear",
+      "name": "Sega Game Gear",
+      "dir": "gamegear",
+      "romJsonFile": "games_1g1r_english_gamegear.json",
+      "libretroName": "Sega - Game Gear",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "Genesis Plus GX", "dll": "cores/genesis_plus_gx_libretro.dll"},
+          {"name": "Gearsystem", "dll": "cores/gearsystem_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".gg", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "tg16",
+      "name": "TurboGrafx-16 / PC Engine",
+      "dir": "tg16",
+      "romJsonFile": "games_1g1r_english_tg16.json",
+      "libretroName": "NEC - PC Engine - TurboGrafx 16",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "Beetle PCE FAST", "dll": "cores/mednafen_pce_fast_libretro.dll"},
+          {"name": "Beetle SuperGrafx", "dll": "cores/mednafen_supergrafx_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".pce", ".sgx", ".cue", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "virtualboy",
+      "name": "Virtual Boy",
+      "dir": "virtualboy",
+      "romJsonFile": "games_1g1r_english_virtualboy.json",
+      "libretroName": "Nintendo - Virtual Boy",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "Beetle VB", "dll": "cores/mednafen_vb_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".vb", ".vboy", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "atari2600",
+      "name": "Atari 2600",
+      "dir": "atari2600",
+      "romJsonFile": "games_1g1r_english_atari2600.json",
+      "libretroName": "Atari - 2600",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "Stella", "dll": "cores/stella_libretro.dll"},
+          {"name": "Stella 2014", "dll": "cores/stella2014_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".a26", ".bin", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "atari7800",
+      "name": "Atari 7800",
+      "dir": "atari7800",
+      "romJsonFile": "games_1g1r_english_atari7800.json",
+      "libretroName": "Atari - 7800",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "ProSystem", "dll": "cores/prosystem_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".a78", ".bin", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "lynx",
+      "name": "Atari Lynx",
+      "dir": "lynx",
+      "romJsonFile": "games_1g1r_english_lynx.json",
+      "libretroName": "Atari - Lynx",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "Handy", "dll": "cores/handy_libretro.dll"},
+          {"name": "Beetle Lynx", "dll": "cores/mednafen_lynx_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".lnx", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "ngpc",
+      "name": "Neo Geo Pocket Color",
+      "dir": "ngpc",
+      "romJsonFile": "games_1g1r_english_ngpc.json",
+      "libretroName": "SNK - Neo Geo Pocket Color",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "Beetle NeoPop", "dll": "cores/mednafen_ngp_libretro.dll"},
+          {"name": "RACE", "dll": "cores/race_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".ngc", ".ngp", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "coleco",
+      "name": "ColecoVision",
+      "dir": "coleco",
+      "romJsonFile": "games_1g1r_english_coleco.json",
+      "libretroName": "Coleco - ColecoVision",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "blueMSX", "dll": "cores/bluemsx_libretro.dll"},
+          {"name": "Gearcoleco", "dll": "cores/gearcoleco_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".col", ".bin", ".rom", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "intellivision",
+      "name": "Intellivision",
+      "dir": "intellivision",
+      "romJsonFile": "games_1g1r_english_intellivision.json",
+      "libretroName": "Mattel - Intellivision",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "FreeIntv", "dll": "cores/freeintv_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".int", ".bin", ".rom", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "wonderswan",
+      "name": "WonderSwan",
+      "dir": "wonderswan",
+      "romJsonFile": "games_1g1r_english_wonderswan.json",
+      "libretroName": "Bandai - WonderSwan",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "Beetle Cygne", "dll": "cores/mednafen_wswan_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".ws", ".zip"],
+      "needsExtract": false
+    },
+    {
+      "id": "wonderswancolor",
+      "name": "WonderSwan Color",
+      "dir": "wonderswancolor",
+      "romJsonFile": "games_1g1r_english_wonderswancolor.json",
+      "libretroName": "Bandai - WonderSwan Color",
+      "emulator": {
+        "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
+        "cores": [
+          {"name": "Beetle Cygne", "dll": "cores/mednafen_wswan_libretro.dll"}
+        ],
+        "name": "RetroArch"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [".wsc", ".zip"],
+      "needsExtract": false
     }
   ]
 }

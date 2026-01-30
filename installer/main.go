@@ -465,12 +465,11 @@ func main() {
 	if platform == "windows" {
 		printInfo("  Launching EmuBuddy...")
 	} else if platform == "linux" {
-		printInfo("  1. Run: ./start_launcher.sh (web interface)")
-		printInfo("  2. Or run: ./start_gui.sh (desktop app)")
+		printInfo("  Run: ./start-emubuddy.sh")
+		printInfo("  Or double-click EmuBuddyLauncher-linux")
 	} else if platform == "darwin" {
-		printInfo("  1. Run: ./start_launcher.sh (web interface)")
-		printInfo("  2. Or run: ./start_gui.sh (desktop app)")
-		printInfo("  3. Mount DMG files and drag apps to Applications folder")
+		printInfo("  Double-click 'Start EmuBuddy.command'")
+		printInfo("  Or run: ./EmuBuddyLauncher-macos")
 	}
 	fmt.Println()
 

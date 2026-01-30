@@ -221,6 +221,21 @@ func main() {
 			waitForExit(1)
 			return
 		}
+		// Check for 7z (p7zip) - needed for some emulators
+		if !commandExists("7z") {
+			printWarning("'7z' (p7zip) not found. Some emulators may not install correctly.")
+			printInfo("  Install with:")
+			if platform == "linux" {
+				printInfo("    Ubuntu/Debian: sudo apt install p7zip-full")
+				printInfo("    Fedora: sudo dnf install p7zip p7zip-plugins")
+				printInfo("    Arch: sudo pacman -S p7zip")
+			} else if platform == "darwin" {
+				printInfo("    macOS: brew install p7zip")
+			}
+			fmt.Println()
+		} else {
+			printSuccess("7z (p7zip) available")
+		}
 		printSuccess("System extraction tools available")
 		extractorPath = "" // Use system commands
 	}

@@ -11,6 +11,9 @@ REM   Build Installer
 REM =========================================
 cd installer
 
+REM Disable CGO for cross-compilation
+set CGO_ENABLED=0
+
 REM Windows Installer
 echo [1/6] Building Installer for Windows...
 set GOOS=windows

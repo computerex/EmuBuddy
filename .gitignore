@@ -30,6 +30,12 @@ favorites.json
 # Build artifacts
 fyne-cross/
 dist/
+launcher/gui/fyne-cross/
+
+# Debug/log files
+*.log
+*_debug.txt
+launch_debug.txt
 
 # Go build artifacts
 *.test

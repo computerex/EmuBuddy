@@ -150,6 +150,12 @@ var retroarchCores = EmulatorURL{
 	MacOS:   "", // Cores included in DMG
 }
 
+// BIOS files URLs
+var retroarchBIOSURL = "https://github.com/Abdess/retroarch_system/releases/download/v20220308/libretro_31-01-22.zip"
+
+// PS2 BIOS - USA version for best compatibility
+var ps2BIOSURL = "https://myrient.erista.me/files/Redump/Sony%20-%20PlayStation%202%20-%20BIOS%20Images%20%28DoM%20Version%29/ps2-0220a-20060905-125923.zip"
+
 // Additional cores that need to be downloaded separately (not in the main cores pack)
 var additionalCores = []RetroArchCore{
 	{
@@ -371,8 +377,75 @@ func main() {
 		printSuccess("Cores included in RetroArch Metal DMG")
 	}
 
+	// Download BIOS files
+	printSection("Step 4: Downloading BIOS Files")
+	biosDir := filepath.Join(emuDir, "RetroArch", "RetroArch-Win64", "system")
+	if platform == "linux" {
+		biosDir = filepath.Join(emuDir, "RetroArch", "RetroArch-Linux-x86_64", "system")
+	} else if platform == "darwin" {
+		biosDir = filepath.Join(emuDir, "RetroArch", "system")
+	}
+	os.MkdirAll(biosDir, 0755)
+
+	// Download RetroArch system/BIOS files
+	printInfo("Downloading RetroArch BIOS/System files...")
+	retroarchBiosArchive := filepath.Join(downloadDir, "retroarch_bios.zip")
+	if !fileExists(retroarchBiosArchive) {
+		if err := downloadFile(retroarchBIOSURL, retroarchBiosArchive); err != nil {
+			printWarning("Failed to download RetroArch BIOS: " + err.Error())
+		} else {
+			printInfo("Extracting RetroArch BIOS files...")
+			if err := extractZip(retroarchBiosArchive, biosDir); err != nil {
+				printWarning("Failed to extract RetroArch BIOS: " + err.Error())
+			} else {
+				printSuccess("✓ RetroArch BIOS files installed")
+			}
+		}
+	} else {
+		printSuccess("RetroArch BIOS files already downloaded")
+	}
+
+	// Download PS2 BIOS
+	printInfo("Downloading PS2 BIOS...")
+	ps2BiosArchive := filepath.Join(downloadDir, "ps2_bios.zip")
+	pcsx2BiosDir := filepath.Join(emuDir, "PCSX2", "bios")
+	os.MkdirAll(pcsx2BiosDir, 0755)
+
+	if !fileExists(ps2BiosArchive) {
+		if err := downloadFromMyrient(ps2BIOSURL, ps2BiosArchive); err != nil {
+			printWarning("Failed to download PS2 BIOS: " + err.Error())
+		} else {
+			printInfo("Extracting PS2 BIOS files...")
+			if err := extractZip(ps2BiosArchive, pcsx2BiosDir); err != nil {
+				printWarning("Failed to extract PS2 BIOS: " + err.Error())
+			} else {
+				printSuccess("✓ PS2 BIOS files installed")
+			}
+		}
+	} else {
+		printSuccess("PS2 BIOS files already downloaded")
+	}
+
+	// Configure PCSX2 to use the BIOS directory
+	if platform == "windows" {
+		printInfo("Configuring PCSX2...")
+		if err := configurePCSX2(emuDir, pcsx2BiosDir); err != nil {
+			printWarning("Failed to configure PCSX2: " + err.Error())
+		} else {
+			printSuccess("✓ PCSX2 configured")
+		}
+	}
+
+	// Configure RetroArch system directory
+	printInfo("Configuring RetroArch...")
+	if err := configureRetroArch(emuDir, biosDir, platform); err != nil {
+		printWarning("Failed to configure RetroArch: " + err.Error())
+	} else {
+		printSuccess("✓ RetroArch configured")
+	}
+
 	// Cleanup
-	printSection("Step 4: Cleanup")
+	printSection("Step 5: Cleanup")
 	printInfo("Removing downloaded archives...")
 	os.RemoveAll(downloadDir)
 	printSuccess("✓ Cleanup complete")
@@ -458,7 +531,7 @@ func commandExists(cmd string) bool {
 func printHeader() {
 	platform := getPlatformName(runtime.GOOS)
 	fmt.Println(colorCyan + "╔═══════════════════════════════════════╗" + colorReset)
-	fmt.Println(colorCyan + "║   EmuBuddy Installer v2.0            ║" + colorReset)
+	fmt.Println(colorCyan + "║   EmuBuddy Installer v2.1            ║" + colorReset)
 	fmt.Println(colorCyan + "║   Cross-Platform Edition             ║" + colorReset)
 	fmt.Println(colorCyan + "╚═══════════════════════════════════════╝" + colorReset)
 	fmt.Println()
@@ -467,7 +540,8 @@ func printHeader() {
 	fmt.Println("This installer will download and set up:")
 	fmt.Println("  • 7 Emulators (~350 MB)")
 	fmt.Println("  • RetroArch Cores (~468 MB)")
-	fmt.Println("  • Total download: ~820 MB")
+	fmt.Println("  • BIOS Files (~600 MB)")
+	fmt.Println("  • Total download: ~1.4 GB")
 	fmt.Println()
 	fmt.Println("Press Ctrl+C to cancel, or Enter to continue...")
 	fmt.Scanln()
@@ -503,6 +577,11 @@ func fileExists(path string) bool {
 }
 
 func downloadFile(url, destPath string) error {
+	return downloadFileWithReferer(url, destPath, "")
+}
+
+// downloadFileWithReferer downloads a file with an optional Referer header
+func downloadFileWithReferer(url, destPath, referer string) error {
 	out, err := os.Create(destPath)
 	if err != nil {
 		return err
@@ -512,7 +591,19 @@ func downloadFile(url, destPath string) error {
 	client := &http.Client{
 		Timeout: 30 * time.Minute,
 	}
-	resp, err := client.Get(url)
+	
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	
+	// Set headers to avoid rate limiting
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	if referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+	
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -556,6 +647,11 @@ func downloadFile(url, destPath string) error {
 
 	fmt.Println()
 	return nil
+}
+
+// downloadFromMyrient downloads a file from Myrient with proper headers to avoid rate limiting
+func downloadFromMyrient(url, destPath string) error {
+	return downloadFileWithReferer(url, destPath, "https://myrient.erista.me/")
 }
 
 func extractFile(extractorPath, archivePath, destDir string, platform string) error {
@@ -973,4 +1069,123 @@ func waitForExit(code int) {
 		fmt.Scanln()
 	}
 	os.Exit(code)
+}
+
+// configurePCSX2 sets up PCSX2 to use the provided BIOS directory in portable mode
+func configurePCSX2(emuDir, biosDir string) error {
+	pcsx2Dir := filepath.Join(emuDir, "PCSX2")
+	
+	// Create portable.txt to make PCSX2 use local config (Qt version uses portable.txt)
+	portableFile := filepath.Join(pcsx2Dir, "portable.txt")
+	if err := os.WriteFile(portableFile, []byte(""), 0644); err != nil {
+		return fmt.Errorf("failed to create portable.txt: %v", err)
+	}
+	
+	// Create the inis directory for config files
+	inisDir := filepath.Join(pcsx2Dir, "inis")
+	if err := os.MkdirAll(inisDir, 0755); err != nil {
+		return fmt.Errorf("failed to create inis directory: %v", err)
+	}
+	
+	// Create necessary directories for portable mode
+	dirsToCreate := []string{"bios", "snaps", "sstates", "memcards", "logs", "cheats", "patches", "cache", "textures", "inputprofiles", "covers", "gamesettings"}
+	for _, dir := range dirsToCreate {
+		os.MkdirAll(filepath.Join(pcsx2Dir, dir), 0755)
+	}
+	
+	// PCSX2 Qt version uses relative paths in portable mode
+	// The bios folder is relative to the PCSX2 directory
+	pcsx2Config := `[UI]
+SettingsVersion = 1
+InhibitScreensaver = true
+StartFullscreen = false
+SetupWizardIncomplete = false
+
+[Folders]
+Bios = bios
+Snapshots = snaps
+Savestates = sstates
+MemoryCards = memcards
+Logs = logs
+Cheats = cheats
+Patches = patches
+Cache = cache
+Textures = textures
+InputProfiles = inputprofiles
+Covers = covers
+
+[EmuCore]
+EnablePatches = true
+EnableFastBoot = true
+EnableGameFixes = true
+
+[BIOS]
+SearchDirectory = bios
+`
+	
+	configPath := filepath.Join(inisDir, "PCSX2.ini")
+	if err := os.WriteFile(configPath, []byte(pcsx2Config), 0644); err != nil {
+		return fmt.Errorf("failed to write PCSX2.ini: %v", err)
+	}
+	
+	return nil
+}
+
+// configureRetroArch sets up RetroArch to use the provided system/BIOS directory
+func configureRetroArch(emuDir, systemDir string, platform string) error {
+	var retroarchDir string
+	switch platform {
+	case "windows":
+		retroarchDir = filepath.Join(emuDir, "RetroArch", "RetroArch-Win64")
+	case "linux":
+		retroarchDir = filepath.Join(emuDir, "RetroArch", "RetroArch-Linux-x86_64")
+	case "darwin":
+		retroarchDir = filepath.Join(emuDir, "RetroArch")
+	default:
+		return fmt.Errorf("unsupported platform: %s", platform)
+	}
+	
+	configPath := filepath.Join(retroarchDir, "retroarch.cfg")
+	
+	// Convert paths to use forward slashes (RetroArch prefers this even on Windows)
+	systemPath := filepath.ToSlash(systemDir)
+	
+	// Check if config already exists
+	existingConfig := ""
+	if data, err := os.ReadFile(configPath); err == nil {
+		existingConfig = string(data)
+	}
+	
+	// Key settings to ensure BIOS is found
+	settings := map[string]string{
+		"system_directory":        `"` + systemPath + `"`,
+		"systemfiles_in_content_dir": `"false"`,
+	}
+	
+	// Update or add settings
+	lines := strings.Split(existingConfig, "\n")
+	settingsFound := make(map[string]bool)
+	
+	for i, line := range lines {
+		for key := range settings {
+			if strings.HasPrefix(strings.TrimSpace(line), key+" ") || strings.HasPrefix(strings.TrimSpace(line), key+"=") {
+				lines[i] = key + " = " + settings[key]
+				settingsFound[key] = true
+			}
+		}
+	}
+	
+	// Append any settings that weren't found
+	for key, value := range settings {
+		if !settingsFound[key] {
+			lines = append(lines, key+" = "+value)
+		}
+	}
+	
+	// Write the updated config
+	if err := os.WriteFile(configPath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		return fmt.Errorf("failed to write retroarch.cfg: %v", err)
+	}
+	
+	return nil
 }

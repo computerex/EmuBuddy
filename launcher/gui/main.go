@@ -367,6 +367,7 @@ func (a *App) buildUI() {
 		a.selectedGameIdx = id
 		a.focusOnGames = true
 		a.updateStatus()
+		a.updateLaunchButton()
 		a.gameList.Refresh()
 		a.systemList.Refresh()
 	}
@@ -434,10 +435,19 @@ func (a *App) buildUI() {
 		a.filterGames()
 	})
 	
-	// Launch button
+	// Launch/Download button - text changes based on game status
 	a.launchBtn = widget.NewButton("Launch", func() {
-		logDebug("Launch button clicked")
-		a.launchSelected()
+		if a.selectedGameIdx < 0 || a.selectedGameIdx >= len(a.filteredGames) {
+			return
+		}
+		game := a.filteredGames[a.selectedGameIdx]
+		if a.romCache[game.Name] {
+			logDebug("Launch button clicked - launching")
+			a.launchSelected()
+		} else {
+			logDebug("Launch button clicked - downloading")
+			a.downloadSelected()
+		}
 	})
 	
 	// Game panel with header, favorites checkbox, launch button, and search
@@ -1045,6 +1055,19 @@ func (a *App) updateStatus() {
 		a.statusBar.SetText(fmt.Sprintf("Ready: %s", name))
 	} else {
 		a.statusBar.SetText(fmt.Sprintf("Not downloaded: %s (%s)", name, game.Size))
+	}
+}
+
+func (a *App) updateLaunchButton() {
+	if a.selectedGameIdx < 0 || a.selectedGameIdx >= len(a.filteredGames) {
+		a.launchBtn.SetText("Launch")
+		return
+	}
+	game := a.filteredGames[a.selectedGameIdx]
+	if a.romCache[game.Name] {
+		a.launchBtn.SetText("Launch")
+	} else {
+		a.launchBtn.SetText("Download")
 	}
 }
 

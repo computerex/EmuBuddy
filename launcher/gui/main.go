@@ -44,40 +44,72 @@ func isWindowFocused(windowTitle string) bool {
 	return strings.Contains(title, windowTitle)
 }
 
-// DoubleTappableList wraps a widget.List to add double-tap support
-type DoubleTappableList struct {
+// Debug logging
+var debugLog *os.File
+
+func logDebug(format string, args ...interface{}) {
+	if debugLog == nil {
+		var err error
+		debugLog, err = os.OpenFile(filepath.Join(baseDir, "launcher_debug.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			return
+		}
+	}
+	msg := fmt.Sprintf("[%s] %s\n", time.Now().Format("15:04:05.000"), fmt.Sprintf(format, args...))
+	debugLog.WriteString(msg)
+	debugLog.Sync()
+}
+
+// TappableListItem is a container that captures taps and double-taps for list items
+type TappableListItem struct {
 	widget.BaseWidget
-	List          *widget.List
-	OnDoubleTap   func()
+	Content       fyne.CanvasObject
+	list          *widget.List
+	itemID        widget.ListItemID
+	onDoubleTap   func(widget.ListItemID)
 	lastTapTime   time.Time
 }
 
-func NewDoubleTappableList(list *widget.List, onDoubleTap func()) *DoubleTappableList {
-	d := &DoubleTappableList{
-		List:        list,
-		OnDoubleTap: onDoubleTap,
+func NewTappableListItem(content fyne.CanvasObject) *TappableListItem {
+	t := &TappableListItem{
+		Content: content,
 	}
-	d.ExtendBaseWidget(d)
-	return d
+	t.ExtendBaseWidget(t)
+	return t
 }
 
-func (d *DoubleTappableList) CreateRenderer() fyne.WidgetRenderer {
-	return widget.NewSimpleRenderer(d.List)
+func (t *TappableListItem) SetListInfo(list *widget.List, id widget.ListItemID, onDoubleTap func(widget.ListItemID)) {
+	t.list = list
+	t.itemID = id
+	t.onDoubleTap = onDoubleTap
 }
 
-func (d *DoubleTappableList) Tapped(e *fyne.PointEvent) {
+func (t *TappableListItem) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(t.Content)
+}
+
+func (t *TappableListItem) Tapped(e *fyne.PointEvent) {
 	now := time.Now()
-	if now.Sub(d.lastTapTime) < 400*time.Millisecond {
-		if d.OnDoubleTap != nil {
-			d.OnDoubleTap()
+	
+	// Check for double-tap
+	if now.Sub(t.lastTapTime) < 400*time.Millisecond {
+		logDebug("Double-tap on item %d!", t.itemID)
+		if t.onDoubleTap != nil {
+			t.onDoubleTap(t.itemID)
 		}
-		d.lastTapTime = time.Time{} // Reset
-	} else {
-		d.lastTapTime = now
+		t.lastTapTime = time.Time{}
+		return
+	}
+	
+	t.lastTapTime = now
+	
+	// Select this item in the list
+	if t.list != nil {
+		t.list.Select(t.itemID)
 	}
 }
 
-func (d *DoubleTappableList) TappedSecondary(e *fyne.PointEvent) {}
+func (t *TappableListItem) TappedSecondary(e *fyne.PointEvent) {}
 
 type ROM struct {
 	Name string `json:"name"`
@@ -215,18 +247,20 @@ type App struct {
 	// UI elements
 	systemList        *widget.List
 	gameList          *widget.List
-	tappableGameList  *DoubleTappableList
 	statusBar         *widget.Label
 	searchEntry       *widget.Entry
 	searchQuery       string
 	instructions      *widget.Label
 	favsCheck         *widget.Check
+	launchBtn         *widget.Button
 	
 	// Emulator choice UI
-	emulatorList *widget.List
-	mainSplit    *container.Split
-	gamePanel    *fyne.Container
-	emulatorPanel *fyne.Container
+	emulatorList      *widget.List
+	emulatorSelectBtn *widget.Button
+	emulatorCancelBtn *widget.Button
+	mainSplit         *container.Split
+	gamePanel         *fyne.Container
+	emulatorPanel     *fyne.Container
 }
 
 func main() {
@@ -275,25 +309,30 @@ func (a *App) buildUI() {
 		a.systemList.Refresh()
 	}
 
-	// Game list on right
+	// Game list on right - use TappableListItem for double-click support
 	a.gameList = widget.NewList(
 		func() int { return len(a.filteredGames) },
 		func() fyne.CanvasObject {
 			nameLabel := widget.NewLabel("Game Name Here")
 			statusLabel := widget.NewLabel("Status")
 			sizeLabel := widget.NewLabel("Size")
-			return container.NewBorder(nil, nil, nil,
+			content := container.NewBorder(nil, nil, nil,
 				container.NewHBox(statusLabel, sizeLabel),
 				nameLabel,
 			)
+			return NewTappableListItem(content)
 		},
 		func(id widget.ListItemID, item fyne.CanvasObject) {
 			if id >= len(a.filteredGames) {
 				return
 			}
 			game := a.filteredGames[id]
-			box := item.(*fyne.Container)
-
+			tappable := item.(*TappableListItem)
+			tappable.SetListInfo(a.gameList, id, func(itemID widget.ListItemID) {
+				a.launchSelected()
+			})
+			
+			box := tappable.Content.(*fyne.Container)
 			nameLabel := box.Objects[0].(*widget.Label)
 			rightBox := box.Objects[1].(*fyne.Container)
 			statusLabel := rightBox.Objects[0].(*widget.Label)
@@ -331,11 +370,6 @@ func (a *App) buildUI() {
 		a.gameList.Refresh()
 		a.systemList.Refresh()
 	}
-	
-	// Wrap game list with double-tap support
-	a.tappableGameList = NewDoubleTappableList(a.gameList, func() {
-		a.launchSelected()
-	})
 
 	// Search box
 	a.searchEntry = widget.NewEntry()
@@ -365,17 +399,23 @@ func (a *App) buildUI() {
 		a.systemList,
 	)
 
-	// Emulator choice list
+	// Emulator choice list - use TappableListItem for double-click support
 	a.emulatorList = widget.NewList(
 		func() int { return len(a.emulatorChoices) },
 		func() fyne.CanvasObject {
-			return widget.NewLabel("Emulator Option")
+			label := widget.NewLabel("Emulator Option")
+			return NewTappableListItem(label)
 		},
 		func(id widget.ListItemID, item fyne.CanvasObject) {
 			if id >= len(a.emulatorChoices) {
 				return
 			}
-			label := item.(*widget.Label)
+			tappable := item.(*TappableListItem)
+			tappable.SetListInfo(a.emulatorList, id, func(itemID widget.ListItemID) {
+				a.confirmEmulatorChoice()
+			})
+			
+			label := tappable.Content.(*widget.Label)
 			name := a.emulatorChoices[id]
 			if id == a.selectedEmulatorIdx {
 				name = "> " + name
@@ -394,23 +434,42 @@ func (a *App) buildUI() {
 		a.filterGames()
 	})
 	
-	// Game panel with header, favorites checkbox, and search
+	// Launch button
+	a.launchBtn = widget.NewButton("Launch", func() {
+		logDebug("Launch button clicked")
+		a.launchSelected()
+	})
+	
+	// Game panel with header, favorites checkbox, launch button, and search
 	gamesLabel := widget.NewLabel("GAMES")
 	gameHeader := container.NewBorder(nil, nil,
-		container.NewHBox(gamesLabel, a.favsCheck),
+		container.NewHBox(gamesLabel, a.favsCheck, a.launchBtn),
 		nil,
 		a.searchEntry,
 	)
 	a.gamePanel = container.NewBorder(
 		gameHeader, nil, nil, nil,
-		a.tappableGameList,
+		a.gameList,
 	)
 
 	// Emulator choice panel
-	emulatorHeader := widget.NewLabel("CHOOSE EMULATOR (A=Select, B=Cancel)")
+	emulatorHeader := widget.NewLabel("CHOOSE EMULATOR")
 	emulatorHeader.TextStyle = fyne.TextStyle{Bold: true}
+	
+	a.emulatorSelectBtn = widget.NewButton("Select", func() {
+		logDebug("Emulator Select button clicked")
+		a.confirmEmulatorChoice()
+	})
+	a.emulatorCancelBtn = widget.NewButton("Cancel", func() {
+		logDebug("Emulator Cancel button clicked")
+		a.cancelEmulatorChoice()
+	})
+	
+	emulatorButtons := container.NewHBox(a.emulatorSelectBtn, a.emulatorCancelBtn)
+	emulatorHeaderRow := container.NewBorder(nil, nil, emulatorHeader, emulatorButtons)
+	
 	a.emulatorPanel = container.NewBorder(
-		emulatorHeader, nil, nil, nil,
+		emulatorHeaderRow, nil, nil, nil,
 		a.emulatorList,
 	)
 

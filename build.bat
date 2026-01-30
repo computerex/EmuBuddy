@@ -9,7 +9,9 @@ setlocal enabledelayedexpansion
 :: Commands:
 ::   all       - Build everything for all platforms (default)
 ::   installer - Build installer only
-::   launcher  - Build launcher only
+::   launcher  - Build launcher only  
+::   win       - Build Windows launcher only (fast iteration)
+::   win-setup - Build Windows installer only (fast iteration)
 ::   dist      - Create distribution ZIPs
 ::   clean     - Remove build artifacts
 ::
@@ -36,12 +38,47 @@ echo.
 if "%COMMAND%"=="clean" goto :clean
 if "%COMMAND%"=="installer" goto :installer
 if "%COMMAND%"=="launcher" goto :launcher
+if "%COMMAND%"=="win" goto :win
+if "%COMMAND%"=="win-setup" goto :win_setup
 if "%COMMAND%"=="dist" goto :dist
 if "%COMMAND%"=="all" goto :all
 
 echo Unknown command: %COMMAND%
-echo Use: build.bat [all^|installer^|launcher^|dist^|clean]
+echo Use: build.bat [all^|installer^|launcher^|win^|win-setup^|dist^|clean]
 exit /b 1
+
+:: ==========================================
+:: WIN (Windows launcher only - fast)
+:: ==========================================
+:win
+echo Building Windows Launcher...
+cd launcher\gui
+go build -ldflags="-s -w -H windowsgui" -o ..\..\EmuBuddyLauncher.exe .
+if %ERRORLEVEL% EQU 0 (
+    echo [OK] EmuBuddyLauncher.exe
+) else (
+    echo [FAILED]
+)
+cd ..\..
+goto :end
+
+:: ==========================================
+:: WIN-SETUP (Windows installer only - fast)
+:: ==========================================
+:win_setup
+echo Building Windows Installer...
+cd installer
+set CGO_ENABLED=0
+set GOOS=windows
+set GOARCH=amd64
+go build -ldflags="-s -w" -o ..\EmuBuddySetup.exe main.go
+if %ERRORLEVEL% EQU 0 (
+    echo [OK] EmuBuddySetup.exe
+) else (
+    echo [FAILED]
+)
+cd ..
+goto :end
 
 :: ==========================================
 :: CLEAN

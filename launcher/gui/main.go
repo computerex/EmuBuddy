@@ -242,7 +242,75 @@ type App struct {
 	emulatorPanel     *fyne.Container
 }
 
+// isSetupComplete checks if emulators have been installed
+func isSetupComplete() bool {
+	emulatorsDir := filepath.Join(baseDir, "Emulators")
+	
+	// Check if Emulators directory exists
+	info, err := os.Stat(emulatorsDir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	
+	// Check if there's at least one subdirectory (an installed emulator)
+	entries, err := os.ReadDir(emulatorsDir)
+	if err != nil {
+		return false
+	}
+	
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// Found at least one emulator folder
+			return true
+		}
+	}
+	
+	return false
+}
+
+// runSetupAndExit launches the setup program and exits the launcher
+func runSetupAndExit() {
+	var setupPath string
+	
+	switch runtime.GOOS {
+	case "windows":
+		setupPath = filepath.Join(baseDir, "EmuBuddySetup.exe")
+	case "darwin":
+		setupPath = filepath.Join(baseDir, "EmuBuddySetup-macos")
+	default:
+		setupPath = filepath.Join(baseDir, "EmuBuddySetup-linux")
+	}
+	
+	// Check if setup exists
+	if !fileExists(setupPath) {
+		fmt.Println("Setup program not found:", setupPath)
+		fmt.Println("Please run EmuBuddySetup first to install emulators.")
+		os.Exit(1)
+	}
+	
+	// Make executable on Unix
+	if runtime.GOOS != "windows" {
+		os.Chmod(setupPath, 0755)
+	}
+	
+	fmt.Println("No emulators found. Launching setup...")
+	
+	cmd := exec.Command(setupPath)
+	cmd.Dir = baseDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Start()
+	
+	os.Exit(0)
+}
+
 func main() {
+	// Check if setup has been run (Emulators folder should have content)
+	if !isSetupComplete() {
+		runSetupAndExit()
+		return
+	}
+
 	myApp := app.New()
 	myApp.Settings().SetTheme(theme.DarkTheme())
 

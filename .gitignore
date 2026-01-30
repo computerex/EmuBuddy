@@ -1,0 +1,47 @@
+# Binaries
+*.exe
+*.exe~
+EmuBuddyLauncher
+EmuBuddyLauncher-*
+EmuBuddySetup
+EmuBuddySetup-*
+
+# Emulators and ROMs (too large for git)
+Emulators/
+roms/
+
+# macOS SDK (too large for git)
+*.sdk
+MacOSX*.sdk/
+
+# Third-party binaries
+Tools/7zip/
+
+# romget binary (keep source)
+Tools/romget/romget
+Tools/romget/romget.exe
+
+# Box art images
+boxart/
+
+# User data
+favorites.json
+
+# Build artifacts
+fyne-cross/
+dist/
+
+# Go build artifacts
+*.test
+*.out
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

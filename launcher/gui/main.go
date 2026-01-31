@@ -268,16 +268,106 @@ func resolvePlatformPath(windowsPath string) string {
 	if platform == "linux" {
 		// Linux-specific path resolution
 
-		// Handle RetroArch
+		// Handle RetroArch - it's an AppImage on Linux
 		if strings.Contains(path, "RetroArch/RetroArch-Win64/retroarch.exe") {
-			return strings.Replace(path, "RetroArch/RetroArch-Win64/retroarch.exe", "RetroArch/RetroArch-Linux-x86_64/retroarch", 1)
+			// Find the actual AppImage in the RetroArch directory
+			retroarchDir := filepath.Join(baseDir, "Emulators", "RetroArch", "RetroArch-Linux-x86_64")
+			if entries, err := os.ReadDir(retroarchDir); err == nil {
+				for _, entry := range entries {
+					if strings.HasSuffix(strings.ToLower(entry.Name()), ".appimage") {
+						return fmt.Sprintf("Emulators/RetroArch/RetroArch-Linux-x86_64/%s", entry.Name())
+					}
+				}
+			}
+			return "Emulators/RetroArch/RetroArch-Linux-x86_64/RetroArch-Linux-x86_64.AppImage"
 		}
 
-		// Handle RetroArch cores - .dll -> .so
+		// Handle RetroArch cores - .dll -> .so, and update path for Linux
 		if strings.Contains(path, "cores/") && strings.HasSuffix(path, ".dll") {
-			// Just change the extension, keep the relative path
+			// Change extension and update the RetroArch path
 			path = strings.TrimSuffix(path, ".dll") + ".so"
+			path = strings.Replace(path, "RetroArch-Win64", "RetroArch-Linux-x86_64", 1)
 			return path
+		}
+
+		// Handle PCSX2 - find the AppImage in the PCSX2 folder
+		if strings.Contains(path, "PCSX2/pcsx2-qt.exe") {
+			pcsx2Dir := filepath.Join(baseDir, "Emulators", "PCSX2")
+			if entries, err := os.ReadDir(pcsx2Dir); err == nil {
+				for _, entry := range entries {
+					if strings.HasSuffix(strings.ToLower(entry.Name()), ".appimage") {
+						return fmt.Sprintf("Emulators/PCSX2/%s", entry.Name())
+					}
+				}
+			}
+			return "Emulators/PCSX2/pcsx2.AppImage"
+		}
+
+		// Handle PPSSPP - find the AppImage in the PPSSPP folder
+		if strings.Contains(path, "PPSSPP/PPSSPPWindows64.exe") {
+			ppssppDir := filepath.Join(baseDir, "Emulators", "PPSSPP")
+			if entries, err := os.ReadDir(ppssppDir); err == nil {
+				for _, entry := range entries {
+					if strings.HasSuffix(strings.ToLower(entry.Name()), ".appimage") {
+						return fmt.Sprintf("Emulators/PPSSPP/%s", entry.Name())
+					}
+				}
+			}
+			return "Emulators/PPSSPP/ppsspp.AppImage"
+		}
+
+		// Handle mGBA - find the AppImage in the mGBA folder
+		if strings.Contains(path, "mGBA/mGBA-0.10.5-win64/mGBA.exe") {
+			mgbaDir := filepath.Join(baseDir, "Emulators", "mGBA")
+			if entries, err := os.ReadDir(mgbaDir); err == nil {
+				for _, entry := range entries {
+					if strings.HasSuffix(strings.ToLower(entry.Name()), ".appimage") {
+						return fmt.Sprintf("Emulators/mGBA/%s", entry.Name())
+					}
+				}
+			}
+			return "Emulators/mGBA/mgba.AppImage"
+		}
+
+		// Handle melonDS - find the AppImage in the melonDS folder
+		if strings.Contains(path, "melonDS/melonDS.exe") {
+			melondsDir := filepath.Join(baseDir, "Emulators", "melonDS")
+			if entries, err := os.ReadDir(melondsDir); err == nil {
+				for _, entry := range entries {
+					if strings.HasSuffix(strings.ToLower(entry.Name()), ".appimage") {
+						return fmt.Sprintf("Emulators/melonDS/%s", entry.Name())
+					}
+				}
+			}
+			return "Emulators/melonDS/melonDS.AppImage"
+		}
+
+		// Handle Azahar - find the AppImage in the Azahar folder
+		if strings.Contains(path, "Azahar/azahar.exe") {
+			azaharDir := filepath.Join(baseDir, "Emulators", "Azahar")
+			if entries, err := os.ReadDir(azaharDir); err == nil {
+				for _, entry := range entries {
+					if strings.HasSuffix(strings.ToLower(entry.Name()), ".appimage") {
+						return fmt.Sprintf("Emulators/Azahar/%s", entry.Name())
+					}
+				}
+			}
+			return "Emulators/Azahar/azahar.AppImage"
+		}
+
+		// Handle Dolphin - currently Flatpak, but if installed as AppImage
+		if strings.Contains(path, "Dolphin/Dolphin-x64/Dolphin.exe") {
+			dolphinDir := filepath.Join(baseDir, "Emulators", "Dolphin")
+			// Check for AppImage first
+			if entries, err := os.ReadDir(dolphinDir); err == nil {
+				for _, entry := range entries {
+					if strings.HasSuffix(strings.ToLower(entry.Name()), ".appimage") {
+						return fmt.Sprintf("Emulators/Dolphin/%s", entry.Name())
+					}
+				}
+			}
+			// Dolphin is a Flatpak on Linux - return a special marker that launchGame can handle
+			return "flatpak:org.DolphinEmu.dolphin-emu"
 		}
 	}
 
@@ -924,6 +1014,35 @@ func (a *App) pollController() {
 			buttons = remapped
 		}
 
+		// Remap buttons for Linux (Xbox controller via xpad/xboxdrv)
+		// Linux joystick API typically maps Xbox controller as:
+		// bit 0 = A, bit 1 = B, bit 2 = X, bit 3 = Y
+		// bit 4 = LB, bit 5 = RB, bit 6 = Back/Select, bit 7 = Start
+		// bit 8 = Xbox/Guide, bit 9 = Left Stick, bit 10 = Right Stick
+		// This matches our expected layout, but some drivers differ.
+		// If X is doing favorite (Y) and RB is doing favorite toggle (Start):
+		// It suggests: bit 2 -> Y (bit 3), bit 5 -> Start (bit 7)
+		// This could mean buttons are: A=0, B=1, X=3, Y=2, LB=4, RB=7, Start=5
+		if runtime.GOOS == "linux" {
+			// Standard SDL/evdev Xbox controller mapping observed:
+			// The joystick library returns: A=0, B=1, X=2, Y=3, LB=4, RB=5, Back=6, Start=7
+			// But some drivers swap X/Y or have Start/RB swapped
+			// Based on user report: X does favorite (should be download), RB does favorite toggle (should be Start)
+			// This suggests: their X (bit 2) maps to our Y (bit 3), their RB (bit 5) maps to our Start (bit 7)
+			// So their layout is: A=0, B=1, Y=2, X=3, LB=4, Start=5, Back=6, RB=7
+			// We need to swap: bit 2 <-> bit 3 (X and Y), and bit 5 <-> bit 7 (RB and Start)
+			remapped := buttons
+			// Clear bits 2, 3, 5, 7
+			remapped &^= 0x00AC  // Clear bits 2, 3, 5, 7 (0b10101100)
+			// Swap X (bit 2) and Y (bit 3)
+			if buttons&0x04 != 0 { remapped |= 0x08 } // bit 2 -> bit 3
+			if buttons&0x08 != 0 { remapped |= 0x04 } // bit 3 -> bit 2
+			// Swap RB (bit 5) and Start (bit 7)
+			if buttons&0x20 != 0 { remapped |= 0x80 } // bit 5 -> bit 7
+			if buttons&0x80 != 0 { remapped |= 0x20 } // bit 7 -> bit 5
+			buttons = remapped
+		}
+
 		// Check for new button presses
 		justPressed := buttons &^ lastButtons
 
@@ -1415,8 +1534,22 @@ func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 
 	// Resolve platform-specific path
 	emuPath = resolvePlatformPath(emuPath)
-	emuPath = filepath.Join(baseDir, emuPath)
+	
+	// Handle flatpak on Linux
+	isFlatpak := strings.HasPrefix(emuPath, "flatpak:")
+	var flatpakAppID string
+	if isFlatpak {
+		flatpakAppID = strings.TrimPrefix(emuPath, "flatpak:")
+		emuPath = "flatpak"
+	} else {
+		emuPath = filepath.Join(baseDir, emuPath)
+	}
 	emuDir := filepath.Dir(emuPath)
+
+	// On Linux, ensure AppImages are executable
+	if runtime.GOOS == "linux" && strings.HasSuffix(strings.ToLower(emuPath), ".appimage") {
+		os.Chmod(emuPath, 0755)
+	}
 
 	// Log the resolved path for debugging
 	logDebug("Launching with emulator: %s", emuPath)
@@ -1464,6 +1597,12 @@ func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 
 	// Build args
 	args := []string{}
+	
+	// For flatpak, add "run" and the app ID first
+	if isFlatpak {
+		args = append(args, "run", flatpakAppID)
+	}
+	
 	for _, arg := range emuArgs {
 		if strings.Contains(arg, "/") || strings.Contains(arg, "\\") {
 			// Resolve platform-specific core paths
@@ -1484,7 +1623,9 @@ func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 	logDebug("Launch command: %s %v", emuPath, args)
 
 	cmd := exec.Command(emuPath, args...)
-	cmd.Dir = emuDir
+	if !isFlatpak {
+		cmd.Dir = emuDir
+	}
 
 	if err := cmd.Start(); err != nil {
 		a.statusBar.SetText(fmt.Sprintf("Launch failed: %v", err))

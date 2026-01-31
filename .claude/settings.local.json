@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./build-launcher.bat:*)",
+      "Bash(./build-setup.bat)"
+    ]
+  }
+}

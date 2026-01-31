@@ -379,8 +379,31 @@ func main() {
 					}
 				}
 			}
-		} else if fileExists(extractPath) || (platform == "linux" && strings.HasSuffix(archiveName, ".AppImage")) {
-			skipInstall = true
+		} else if platform == "linux" && strings.HasSuffix(archiveName, ".AppImage") {
+			// For AppImage files, check if the .AppImage file exists inside the directory
+			if fileExists(extractPath) {
+				entries, err := os.ReadDir(extractPath)
+				if err == nil {
+					for _, entry := range entries {
+						if strings.HasSuffix(strings.ToLower(entry.Name()), ".appimage") {
+							skipInstall = true
+							break
+						}
+					}
+				}
+			}
+		} else if platform == "linux" && strings.HasSuffix(archiveName, ".7z") && emu.ExtractDir == "RetroArch" {
+			// For Linux RetroArch, check if the extracted directory structure exists
+			retroarchBinary := filepath.Join(extractPath, "RetroArch-Linux-x86_64", "retroarch")
+			if fileExists(retroarchBinary) {
+				skipInstall = true
+			}
+		} else if fileExists(extractPath) {
+			// For other archives, check if the extract directory has content
+			entries, err := os.ReadDir(extractPath)
+			if err == nil && len(entries) > 0 {
+				skipInstall = true
+			}
 		}
 
 		if skipInstall {
@@ -484,6 +507,35 @@ func main() {
 						if err := extractFile(extractorPath, coresArchive, retroarchDir, platform); err != nil {
 							printWarning("Failed to extract cores: " + err.Error())
 						} else {
+							// On Linux, both the main RetroArch 7z and cores 7z extract to nested structures
+							// Move all cores from nested locations to our portable cores directory
+							if platform == "linux" {
+								// Check both possible nested locations
+								nestedPaths := []string{
+									filepath.Join(retroarchDir, "RetroArch-Linux-x86_64.AppImage.home", ".config", "retroarch", "cores"),
+									filepath.Join(retroarchDir, "RetroArch-Linux-x86_64", "RetroArch-Linux-x86_64.AppImage.home", ".config", "retroarch", "cores"),
+								}
+								
+								for _, nestedCoresDir := range nestedPaths {
+									if entries, err := os.ReadDir(nestedCoresDir); err == nil && len(entries) > 0 {
+										printInfo("Moving cores to portable location...")
+										for _, entry := range entries {
+											if strings.HasSuffix(entry.Name(), ".so") {
+												srcPath := filepath.Join(nestedCoresDir, entry.Name())
+												dstPath := filepath.Join(coresDir, entry.Name())
+												// Only move if not already there
+												if _, err := os.Stat(dstPath); os.IsNotExist(err) {
+													os.Rename(srcPath, dstPath)
+												}
+											}
+										}
+									}
+								}
+								
+								// Clean up nested directory structures
+								os.RemoveAll(filepath.Join(retroarchDir, "RetroArch-Linux-x86_64.AppImage.home"))
+								os.RemoveAll(filepath.Join(retroarchDir, "RetroArch-Linux-x86_64", "RetroArch-Linux-x86_64.AppImage.home"))
+							}
 							printSuccess("✓ RetroArch cores installed")
 						}
 					}
@@ -579,14 +631,13 @@ func main() {
 		printSuccess("PS2 BIOS files already downloaded")
 	}
 
-	// Configure PCSX2 to use the BIOS directory
-	if platform == "windows" {
-		printInfo("Configuring PCSX2...")
-		if err := configurePCSX2(emuDir, pcsx2BiosDir); err != nil {
-			printWarning("Failed to configure PCSX2: " + err.Error())
-		} else {
-			printSuccess("✓ PCSX2 configured")
-		}
+	// Configure PCSX2 to use the BIOS directory (portable mode)
+	// On Linux, PCSX2 AppImage also supports portable mode with portable.txt
+	printInfo("Configuring PCSX2...")
+	if err := configurePCSX2(emuDir, pcsx2BiosDir, platform); err != nil {
+		printWarning("Failed to configure PCSX2: " + err.Error())
+	} else {
+		printSuccess("✓ PCSX2 configured")
 	}
 
 	// Configure RetroArch system directory
@@ -1051,6 +1102,11 @@ func extractZip(zipPath, destDir string) error {
 		if copyErr != nil {
 			return fmt.Errorf("write file %s: %v", fpath, copyErr)
 		}
+		
+		// Make AppImage files executable
+		if strings.HasSuffix(strings.ToLower(fpath), ".appimage") {
+			os.Chmod(fpath, 0755)
+		}
 	}
 
 	return nil
@@ -1402,8 +1458,15 @@ func waitForExit(code int) {
 }
 
 // configurePCSX2 sets up PCSX2 to use the provided BIOS directory in portable mode
-func configurePCSX2(emuDir, biosDir string) error {
+func configurePCSX2(emuDir, biosDir, platform string) error {
 	pcsx2Dir := filepath.Join(emuDir, "PCSX2")
+	
+	// On Linux, PCSX2 is an AppImage, which supports portable mode via environment variable
+	// or by placing portable.txt next to the extracted AppImage files
+	// Since we're running the AppImage directly, we need a different approach
+	// The AppImage will look for portable.txt in its extraction directory
+	// But for simplicity, we'll just ensure the bios folder exists with BIOS files
+	// PCSX2 AppImage on Linux will prompt for BIOS location on first run
 	
 	// Create portable.txt to make PCSX2 use local config (Qt version uses portable.txt)
 	portableFile := filepath.Join(pcsx2Dir, "portable.txt")

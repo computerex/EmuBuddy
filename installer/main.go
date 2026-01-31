@@ -147,7 +147,7 @@ var emulators = []Emulator{
 var retroarchCores = EmulatorURL{
 	Windows: "https://buildbot.libretro.com/stable/1.19.1/windows/x86_64/RetroArch_cores.7z",
 	Linux:   "https://buildbot.libretro.com/stable/1.19.1/linux/x86_64/RetroArch_cores.7z",
-	MacOS:   "", // Cores included in DMG
+	MacOS:   "", // macOS cores downloaded individually from nightly builds
 }
 
 // BIOS files URLs
@@ -166,6 +166,122 @@ var additionalCores = []RetroArchCore{
 			MacOS:   "",
 		},
 	},
+}
+
+// downloadMacOSCores downloads essential RetroArch cores for macOS from the buildbot
+func downloadMacOSCores(coresDir, downloadDir string) int {
+	// List of essential cores for all supported systems
+	essentialCores := []string{
+		// NES
+		"nestopia_libretro.dylib.zip",
+		"fceumm_libretro.dylib.zip",
+		"mesen_libretro.dylib.zip",
+		// SNES
+		"snes9x_libretro.dylib.zip",
+		"bsnes_libretro.dylib.zip",
+		// N64
+		"mupen64plus_next_libretro.dylib.zip",
+		"parallel_n64_libretro.dylib.zip",
+		// GB/GBC/GBA
+		"gambatte_libretro.dylib.zip",
+		"sameboy_libretro.dylib.zip",
+		"mgba_libretro.dylib.zip",
+		"vbam_libretro.dylib.zip",
+		"vba_next_libretro.dylib.zip",
+		// DS
+		"melonds_libretro.dylib.zip",
+		"desmume_libretro.dylib.zip",
+		// 3DS
+		"panda3ds_libretro.dylib.zip",
+		// PSP
+		"ppsspp_libretro.dylib.zip",
+		// PS1
+		"mednafen_psx_hw_libretro.dylib.zip",
+		"pcsx_rearmed_libretro.dylib.zip",
+		"swanstation_libretro.dylib.zip",
+		// Dreamcast
+		"flycast_libretro.dylib.zip",
+		// Genesis/MD
+		"genesis_plus_gx_libretro.dylib.zip",
+		"picodrive_libretro.dylib.zip",
+		"blastem_libretro.dylib.zip",
+		// Game Gear
+		"gearsystem_libretro.dylib.zip",
+		// TurboGrafx-16
+		"mednafen_pce_fast_libretro.dylib.zip",
+		"mednafen_supergrafx_libretro.dylib.zip",
+		// Virtual Boy
+		"mednafen_vb_libretro.dylib.zip",
+		// Atari
+		"stella_libretro.dylib.zip",
+		"stella2014_libretro.dylib.zip",
+		"prosystem_libretro.dylib.zip",
+		"handy_libretro.dylib.zip",
+		"mednafen_lynx_libretro.dylib.zip",
+		// Neo Geo Pocket
+		"mednafen_ngp_libretro.dylib.zip",
+		"race_libretro.dylib.zip",
+		// ColecoVision
+		"bluemsx_libretro.dylib.zip",
+		"gearcoleco_libretro.dylib.zip",
+		// Intellivision
+		"freeintv_libretro.dylib.zip",
+		// WonderSwan
+		"mednafen_wswan_libretro.dylib.zip",
+	}
+
+	baseURL := "https://buildbot.libretro.com/nightly/apple/osx/x86_64/latest"
+	downloadedCount := 0
+	total := len(essentialCores)
+
+	printInfo(fmt.Sprintf("Downloading %d cores...", total))
+
+	for i, coreZip := range essentialCores {
+		coreName := strings.TrimSuffix(coreZip, "_libretro.dylib.zip")
+		coreURL := fmt.Sprintf("%s/%s", baseURL, coreZip)
+		coreArchive := filepath.Join(downloadDir, coreZip)
+
+		fmt.Printf("\r  [%d/%d] %s...", i+1, total, coreName)
+
+		// Download core
+		client := &http.Client{Timeout: 30 * time.Second}
+		req, err := http.NewRequest("GET", coreURL, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+
+		resp, err := client.Do(req)
+		if err != nil || resp.StatusCode != 200 {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			continue
+		}
+
+		out, err := os.Create(coreArchive)
+		if err != nil {
+			resp.Body.Close()
+			continue
+		}
+
+		_, err = io.Copy(out, resp.Body)
+		out.Close()
+		resp.Body.Close()
+
+		if err != nil {
+			continue
+		}
+
+		// Extract core
+		if err := extractZipToDir(coreArchive, coresDir); err == nil {
+			downloadedCount++
+		}
+		os.Remove(coreArchive)
+	}
+
+	fmt.Println()
+	return downloadedCount
 }
 
 func main() {
@@ -249,7 +365,25 @@ func main() {
 		extractPath := filepath.Join(emuDir, emu.ExtractDir)
 
 		// Skip if already extracted/installed
-		if fileExists(extractPath) || (platform == "linux" && strings.HasSuffix(archiveName, ".AppImage")) {
+		skipInstall := false
+		if platform == "darwin" && strings.HasSuffix(archiveName, ".dmg") {
+			// For DMG files, check if .app bundle exists inside the directory
+			if fileExists(extractPath) {
+				entries, err := os.ReadDir(extractPath)
+				if err == nil {
+					for _, entry := range entries {
+						if strings.HasSuffix(entry.Name(), ".app") {
+							skipInstall = true
+							break
+						}
+					}
+				}
+			}
+		} else if fileExists(extractPath) || (platform == "linux" && strings.HasSuffix(archiveName, ".AppImage")) {
+			skipInstall = true
+		}
+
+		if skipInstall {
 			printInfo("  Already installed, skipping...")
 			installedCount++
 			continue
@@ -295,64 +429,98 @@ func main() {
 	}
 
 	// Download RetroArch cores
-	if platform != "darwin" { // macOS DMG includes cores
-		printSection("Step 3: Downloading RetroArch Cores")
-		coresURL := getURLForPlatform(retroarchCores, platform)
-		if coresURL != "" {
-			coresArchive := filepath.Join(downloadDir, "RetroArch_cores.7z")
-			retroarchDir := filepath.Join(emuDir, "RetroArch")
+	printSection("Step 3: Downloading RetroArch Cores")
 
-			if !fileExists(coresArchive) {
-				printInfo("Downloading RetroArch cores package...")
-				if err := downloadFile(coresURL, coresArchive); err != nil {
-					printWarning("Failed to download cores: " + err.Error())
-				} else {
-					printInfo("Extracting cores...")
-					// The cores 7z contains RetroArch-Win64/cores/ structure
-					// Extract directly to RetroArch/ so cores end up in RetroArch/RetroArch-Win64/cores/
-					coresExtractPath := retroarchDir
-					if err := extractFile(extractorPath, coresArchive, coresExtractPath, platform); err != nil {
-						printWarning("Failed to extract cores: " + err.Error())
-					} else {
-						printSuccess("✓ RetroArch cores installed")
-					}
-				}
-			} else {
-				printSuccess("RetroArch cores already installed")
+	// Determine cores directory based on platform
+	var coresDir string
+	if platform == "darwin" {
+		// macOS stores cores in ~/Library/Application Support/RetroArch/cores/
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			printWarning("Failed to get home directory: " + err.Error())
+		} else {
+			coresDir = filepath.Join(homeDir, "Library", "Application Support", "RetroArch", "cores")
+		}
+	} else if platform == "linux" {
+		coresDir = filepath.Join(emuDir, "RetroArch", "RetroArch-Linux-x86_64", "cores")
+	} else {
+		coresDir = filepath.Join(emuDir, "RetroArch", "RetroArch-Win64", "cores")
+	}
+
+	if coresDir != "" {
+		os.MkdirAll(coresDir, 0755)
+
+		// Check if cores already exist
+		entries, _ := os.ReadDir(coresDir)
+		hasCores := false
+		for _, entry := range entries {
+			if strings.HasSuffix(entry.Name(), ".dll") || strings.HasSuffix(entry.Name(), ".so") || strings.HasSuffix(entry.Name(), ".dylib") {
+				hasCores = true
+				break
 			}
 		}
 
-		// Download additional cores (like Citra) that aren't in the main pack
-		printInfo("Downloading additional cores...")
-		coresDir := filepath.Join(emuDir, "RetroArch", "RetroArch-Win64", "cores")
-		if platform == "linux" {
-			coresDir = filepath.Join(emuDir, "RetroArch", "RetroArch-Linux-x86_64", "cores")
+		if !hasCores {
+			if platform == "darwin" {
+				// macOS: Download individual cores from nightly builds
+				printInfo("Downloading essential cores for macOS...")
+				downloadedCount := downloadMacOSCores(coresDir, downloadDir)
+				if downloadedCount > 0 {
+					printSuccess(fmt.Sprintf("✓ %d RetroArch cores installed", downloadedCount))
+				} else {
+					printWarning("Failed to download cores")
+				}
+			} else {
+				// Windows/Linux: Download cores bundle
+				coresURL := getURLForPlatform(retroarchCores, platform)
+				if coresURL != "" {
+					coresArchive := filepath.Join(downloadDir, "RetroArch_cores.7z")
+					printInfo("Downloading RetroArch cores package...")
+					if err := downloadFile(coresURL, coresArchive); err != nil {
+						printWarning("Failed to download cores: " + err.Error())
+					} else {
+						printInfo("Extracting cores...")
+						retroarchDir := filepath.Join(emuDir, "RetroArch")
+						if err := extractFile(extractorPath, coresArchive, retroarchDir, platform); err != nil {
+							printWarning("Failed to extract cores: " + err.Error())
+						} else {
+							printSuccess("✓ RetroArch cores installed")
+						}
+					}
+				}
+			}
+		} else {
+			printSuccess("RetroArch cores already installed")
 		}
-		os.MkdirAll(coresDir, 0755)
+	}
+
+	// Download additional cores (like Citra) that aren't in the main pack
+	if platform != "darwin" && coresDir != "" {
+		printInfo("Downloading additional cores...")
 
 		for _, core := range additionalCores {
 			coreURL := getURLForPlatform(core.URLs, platform)
 			if coreURL == "" {
 				continue
 			}
-			
+
 			// Determine expected dll/so name from URL
 			coreName := filepath.Base(coreURL)
 			coreName = strings.TrimSuffix(coreName, ".zip")
 			coreFile := filepath.Join(coresDir, coreName)
-			
+
 			if fileExists(coreFile) {
 				printSuccess(fmt.Sprintf("  ✓ %s already installed", core.Name))
 				continue
 			}
-			
+
 			printInfo(fmt.Sprintf("  Downloading %s core...", core.Name))
 			coreArchive := filepath.Join(downloadDir, filepath.Base(coreURL))
 			if err := downloadFile(coreURL, coreArchive); err != nil {
 				printWarning(fmt.Sprintf("  Failed to download %s: %s", core.Name, err.Error()))
 				continue
 			}
-			
+
 			// Extract the core zip directly to cores folder
 			if err := extractZipToDir(coreArchive, coresDir); err != nil {
 				printWarning(fmt.Sprintf("  Failed to extract %s: %s", core.Name, err.Error()))
@@ -360,9 +528,6 @@ func main() {
 				printSuccess(fmt.Sprintf("  ✓ %s core installed", core.Name))
 			}
 		}
-	} else {
-		printSection("Step 3: RetroArch Cores")
-		printSuccess("Cores included in RetroArch Metal DMG")
 	}
 
 	// Download BIOS files
@@ -672,10 +837,7 @@ func extractFile(extractorPath, archivePath, destDir string, platform string) er
 		return os.Rename(archivePath, finalPath)
 
 	case strings.HasSuffix(archivePath, ".dmg"):
-		printInfo("  DMG file downloaded. Mount it manually and drag to Applications folder.")
-		// Move DMG to a visible location
-		dmgPath := filepath.Join(filepath.Dir(destDir), filepath.Base(archivePath))
-		return os.Rename(archivePath, dmgPath)
+		return extractDMG(archivePath, destDir)
 
 	case strings.HasSuffix(archivePath, ".flatpak"):
 		printInfo("  Flatpak downloaded. Install with: flatpak install " + archivePath)
@@ -1005,6 +1167,127 @@ func extractTar(reader io.Reader, destDir string) error {
 				return err
 			}
 			outFile.Close()
+		}
+	}
+
+	return nil
+}
+
+// extractDMG mounts a DMG file, copies the .app bundle to destDir, and unmounts
+func extractDMG(dmgPath, destDir string) error {
+	// Create temp mount point
+	mountPoint := filepath.Join(os.TempDir(), fmt.Sprintf("emubuddy_mount_%d", time.Now().Unix()))
+	if err := os.MkdirAll(mountPoint, 0755); err != nil {
+		return fmt.Errorf("failed to create mount point: %v", err)
+	}
+	defer os.RemoveAll(mountPoint)
+
+	// Mount the DMG
+	cmd := exec.Command("hdiutil", "attach", dmgPath, "-mountpoint", mountPoint, "-nobrowse", "-quiet")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to mount DMG: %v", err)
+	}
+
+	// Ensure unmount on exit
+	defer func() {
+		exec.Command("hdiutil", "detach", mountPoint, "-quiet").Run()
+	}()
+
+	// Find .app bundles in the mounted volume
+	entries, err := os.ReadDir(mountPoint)
+	if err != nil {
+		return fmt.Errorf("failed to read mount point: %v", err)
+	}
+
+	// Create destination directory
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return fmt.Errorf("failed to create destination: %v", err)
+	}
+
+	// Copy all .app bundles
+	copied := false
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".app") {
+			srcPath := filepath.Join(mountPoint, entry.Name())
+			dstPath := filepath.Join(destDir, entry.Name())
+
+			// Copy the .app bundle recursively
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return fmt.Errorf("failed to copy %s: %v", entry.Name(), err)
+			}
+			copied = true
+		}
+	}
+
+	if !copied {
+		return fmt.Errorf("no .app bundles found in DMG")
+	}
+
+	return nil
+}
+
+// copyDir recursively copies a directory, handling symlinks properly
+func copyDir(src, dst string) error {
+	// Get source directory info (use Lstat to not follow symlinks)
+	srcInfo, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+
+	// If source is a symlink, copy the symlink itself
+	if srcInfo.Mode()&os.ModeSymlink != 0 {
+		linkTarget, err := os.Readlink(src)
+		if err != nil {
+			return err
+		}
+		return os.Symlink(linkTarget, dst)
+	}
+
+	// Create destination directory
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+
+	// Read source directory
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		// Check if it's a symlink
+		srcEntryInfo, err := os.Lstat(srcPath)
+		if err != nil {
+			return err
+		}
+
+		if srcEntryInfo.Mode()&os.ModeSymlink != 0 {
+			// Copy the symlink itself
+			linkTarget, err := os.Readlink(srcPath)
+			if err != nil {
+				return err
+			}
+			if err := os.Symlink(linkTarget, dstPath); err != nil {
+				return err
+			}
+		} else if entry.IsDir() {
+			// Recursively copy subdirectory
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			// Copy file
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+
+			// Preserve executable permissions
+			if info, err := os.Stat(srcPath); err == nil {
+				os.Chmod(dstPath, info.Mode())
+			}
 		}
 	}
 

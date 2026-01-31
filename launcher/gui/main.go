@@ -197,6 +197,93 @@ func saveFavorites() {
 	os.WriteFile(favoritesPath, data, 0644)
 }
 
+// resolvePlatformPath converts Windows paths from systems.json to platform-specific paths
+func resolvePlatformPath(windowsPath string) string {
+	platform := runtime.GOOS
+
+	if platform == "windows" {
+		return windowsPath
+	}
+
+	// Convert to forward slashes
+	path := filepath.ToSlash(windowsPath)
+
+	if platform == "darwin" {
+		// macOS-specific path resolution
+
+		// Handle RetroArch
+		if strings.Contains(path, "RetroArch/RetroArch-Win64/retroarch.exe") {
+			return strings.Replace(path, "RetroArch/RetroArch-Win64/retroarch.exe", "RetroArch/RetroArch.app/Contents/MacOS/RetroArch", 1)
+		}
+
+		// Handle RetroArch cores - .dll -> .dylib
+		// On macOS, cores are stored in ~/Library/Application Support/RetroArch/cores/
+		if strings.Contains(path, "cores/") && strings.HasSuffix(path, ".dll") {
+			coreName := filepath.Base(path)
+			coreName = strings.TrimSuffix(coreName, ".dll") + ".dylib"
+			homeDir, _ := os.UserHomeDir()
+			return filepath.Join(homeDir, "Library/Application Support/RetroArch/cores", coreName)
+		}
+
+		// Handle Dolphin
+		if strings.Contains(path, "Dolphin/Dolphin-x64/Dolphin.exe") {
+			return strings.Replace(path, "Dolphin/Dolphin-x64/Dolphin.exe", "Dolphin/Dolphin.app/Contents/MacOS/Dolphin", 1)
+		}
+
+		// Handle PCSX2
+		if strings.Contains(path, "PCSX2/pcsx2-qt.exe") {
+			// Find the actual .app bundle (version may vary)
+			pcsx2Dir := filepath.Join(baseDir, "Emulators", "PCSX2")
+			if entries, err := os.ReadDir(pcsx2Dir); err == nil {
+				for _, entry := range entries {
+					if strings.HasPrefix(entry.Name(), "PCSX2") && strings.HasSuffix(entry.Name(), ".app") {
+						return fmt.Sprintf("Emulators/PCSX2/%s/Contents/MacOS/PCSX2-qt", entry.Name())
+					}
+				}
+			}
+			return strings.Replace(path, "PCSX2/pcsx2-qt.exe", "PCSX2/PCSX2.app/Contents/MacOS/PCSX2-qt", 1)
+		}
+
+		// Handle PPSSPP
+		if strings.Contains(path, "PPSSPP/PPSSPPWindows64.exe") {
+			return strings.Replace(path, "PPSSPP/PPSSPPWindows64.exe", "PPSSPP/PPSSPP.app/Contents/MacOS/PPSSPP", 1)
+		}
+
+		// Handle mGBA
+		if strings.Contains(path, "mGBA/mGBA-0.10.5-win64/mGBA.exe") {
+			return strings.Replace(path, "mGBA/mGBA-0.10.5-win64/mGBA.exe", "mGBA/mGBA.app/Contents/MacOS/mGBA", 1)
+		}
+
+		// Handle melonDS
+		if strings.Contains(path, "melonDS/melonDS.exe") {
+			return strings.Replace(path, "melonDS/melonDS.exe", "melonDS/melonDS.app/Contents/MacOS/melonDS", 1)
+		}
+
+		// Handle Azahar
+		if strings.Contains(path, "Azahar/azahar.exe") {
+			return strings.Replace(path, "Azahar/azahar.exe", "Azahar/azahar.app/Contents/MacOS/azahar", 1)
+		}
+	}
+
+	if platform == "linux" {
+		// Linux-specific path resolution
+
+		// Handle RetroArch
+		if strings.Contains(path, "RetroArch/RetroArch-Win64/retroarch.exe") {
+			return strings.Replace(path, "RetroArch/RetroArch-Win64/retroarch.exe", "RetroArch/RetroArch-Linux-x86_64/retroarch", 1)
+		}
+
+		// Handle RetroArch cores - .dll -> .so
+		if strings.Contains(path, "cores/") && strings.HasSuffix(path, ".dll") {
+			// Just change the extension, keep the relative path
+			path = strings.TrimSuffix(path, ".dll") + ".so"
+			return path
+		}
+	}
+
+	return windowsPath
+}
+
 // App holds the application state
 type App struct {
 	window          fyne.Window
@@ -1289,8 +1376,15 @@ func (a *App) confirmEmulatorChoice() {
 func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 	config := systems[a.currentSystem]
 	romDir := filepath.Join(romsDir, config.Dir)
+
+	// Resolve platform-specific path
+	emuPath = resolvePlatformPath(emuPath)
 	emuPath = filepath.Join(baseDir, emuPath)
 	emuDir := filepath.Dir(emuPath)
+
+	// Log the resolved path for debugging
+	logDebug("Launching with emulator: %s", emuPath)
+	logDebug("Emulator dir: %s", emuDir)
 
 	// Find ROM file
 	var romPath string
@@ -1336,12 +1430,22 @@ func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 	args := []string{}
 	for _, arg := range emuArgs {
 		if strings.Contains(arg, "/") || strings.Contains(arg, "\\") {
-			args = append(args, filepath.Join(emuDir, arg))
+			// Resolve platform-specific core paths
+			resolvedArg := resolvePlatformPath(arg)
+			// If resolved path is absolute, use it directly; otherwise join with emuDir
+			if filepath.IsAbs(resolvedArg) {
+				args = append(args, resolvedArg)
+			} else {
+				args = append(args, filepath.Join(emuDir, resolvedArg))
+			}
 		} else {
 			args = append(args, arg)
 		}
 	}
 	args = append(args, romPath)
+
+	// Log launch command for debugging
+	logDebug("Launch command: %s %v", emuPath, args)
 
 	cmd := exec.Command(emuPath, args...)
 	cmd.Dir = emuDir

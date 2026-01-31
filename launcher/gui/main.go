@@ -487,10 +487,142 @@ func runSetupAndExit() {
 	os.Exit(0)
 }
 
+// launchROMHeadless launches a ROM without showing the GUI
+func launchROMHeadless(systemID string, romPath string) {
+	config, exists := systems[systemID]
+	if !exists {
+		fmt.Printf("Error: Unknown system '%s'\n", systemID)
+		fmt.Println("Available systems:", systemsList)
+		os.Exit(1)
+	}
+
+	if romPath == "" {
+		fmt.Printf("Error: ROM path required\n")
+		fmt.Printf("Usage: %s --launch <system> <rom_path>\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	if !fileExists(romPath) {
+		fmt.Printf("Error: ROM not found: %s\n", romPath)
+		os.Exit(1)
+	}
+
+	// Create a minimal game ROM struct
+	game := ROM{
+		Name: filepath.Base(romPath),
+	}
+
+	fmt.Printf("Launching %s: %s\n", config.Name, game.Name)
+
+	// Use first emulator/core
+	emuPath := config.Emulator.Path
+	var emuArgs []string
+
+	if len(config.Emulator.Cores) > 0 {
+		// Use first core
+		emuArgs = []string{"-L", config.Emulator.Cores[0].Dll}
+	} else {
+		emuArgs = config.Emulator.Args
+	}
+
+	// Launch the game (reuse existing logic)
+	launchGameHeadless(game, romPath, emuPath, emuArgs)
+}
+
+// launchGameHeadless launches a game without GUI
+func launchGameHeadless(game ROM, romPath string, emuPath string, emuArgs []string) {
+	// Resolve platform-specific path
+	emuPath = resolvePlatformPath(emuPath)
+
+	// Handle flatpak on Linux
+	isFlatpak := strings.HasPrefix(emuPath, "flatpak:")
+	var flatpakAppID string
+	if isFlatpak {
+		flatpakAppID = strings.TrimPrefix(emuPath, "flatpak:")
+		emuPath = "flatpak"
+	} else {
+		emuPath = filepath.Join(baseDir, emuPath)
+	}
+	emuDir := filepath.Dir(emuPath)
+
+	// On Linux, ensure AppImages are executable
+	if runtime.GOOS == "linux" && strings.HasSuffix(strings.ToLower(emuPath), ".appimage") {
+		os.Chmod(emuPath, 0755)
+	}
+
+	// Build args
+	args := []string{}
+
+	// For flatpak, add "run" and the app ID first
+	if isFlatpak {
+		args = append(args, "run", flatpakAppID)
+	}
+
+	for _, arg := range emuArgs {
+		if strings.Contains(arg, "/") || strings.Contains(arg, "\\") {
+			// Resolve platform-specific core paths
+			resolvedArg := resolvePlatformPath(arg)
+			if filepath.IsAbs(resolvedArg) {
+				args = append(args, resolvedArg)
+			} else {
+				resolvedPath := filepath.Join(emuDir, resolvedArg)
+
+				// On Linux, verify core file exists
+				if runtime.GOOS == "linux" && strings.HasSuffix(strings.ToLower(resolvedPath), ".so") {
+					if !fileExists(resolvedPath) {
+						fmt.Printf("ERROR: Core file not found: %s\n", resolvedPath)
+						os.Exit(1)
+					}
+				}
+
+				args = append(args, resolvedPath)
+			}
+		} else {
+			args = append(args, arg)
+		}
+	}
+	args = append(args, romPath)
+
+	fmt.Printf("Command: %s %v\n", emuPath, args)
+
+	cmd := exec.Command(emuPath, args...)
+	if !isFlatpak {
+		cmd.Dir = emuDir
+	}
+
+	// On Linux, set environment variables to fix AppImage compatibility
+	if runtime.GOOS == "linux" {
+		cmd.Env = append(os.Environ(),
+			"SDL_VIDEODRIVER=x11",
+			"QT_QPA_PLATFORM=xcb",
+		)
+	}
+
+	// Capture output for debugging
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Launch failed: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func main() {
 	// Check if setup has been run (Emulators folder should have content)
 	if !isSetupComplete() {
 		runSetupAndExit()
+		return
+	}
+
+	// Check for CLI arguments for headless ROM launch
+	if len(os.Args) >= 3 && os.Args[1] == "--launch" {
+		systemID := os.Args[2]
+		var romPath string
+		if len(os.Args) >= 4 {
+			romPath = os.Args[3]
+		}
+		launchROMHeadless(systemID, romPath)
 		return
 	}
 
@@ -990,9 +1122,17 @@ func (a *App) pollController() {
 			}
 		}
 
-		if len(state.AxisData) >= 4 {
+		// Right stick Y axis - axis index differs by platform
+		var rightAxisIndex int
+		if runtime.GOOS == "linux" {
+			rightAxisIndex = 4 // Linux: axis 4 is right Y
+		} else {
+			rightAxisIndex = 3 // Windows/macOS: axis 3 is right Y
+		}
+
+		if len(state.AxisData) > rightAxisIndex {
+			axisValue := state.AxisData[rightAxisIndex]
 			// Invert Y axis for macOS
-			axisValue := state.AxisData[3]
 			if runtime.GOOS == "darwin" {
 				axisValue = -axisValue
 			}
@@ -1020,34 +1160,9 @@ func (a *App) pollController() {
 			buttons = remapped
 		}
 
-		// Remap buttons for Linux (Xbox controller via xpad/xboxdrv)
-		// Linux joystick API typically maps Xbox controller as:
+		// Linux uses standard joystick API mapping (no remapping needed)
 		// bit 0 = A, bit 1 = B, bit 2 = X, bit 3 = Y
 		// bit 4 = LB, bit 5 = RB, bit 6 = Back/Select, bit 7 = Start
-		// bit 8 = Xbox/Guide, bit 9 = Left Stick, bit 10 = Right Stick
-		// This matches our expected layout, but some drivers differ.
-		// If X is doing favorite (Y) and RB is doing favorite toggle (Start):
-		// It suggests: bit 2 -> Y (bit 3), bit 5 -> Start (bit 7)
-		// This could mean buttons are: A=0, B=1, X=3, Y=2, LB=4, RB=7, Start=5
-		if runtime.GOOS == "linux" {
-			// Standard SDL/evdev Xbox controller mapping observed:
-			// The joystick library returns: A=0, B=1, X=2, Y=3, LB=4, RB=5, Back=6, Start=7
-			// But some drivers swap X/Y or have Start/RB swapped
-			// Based on user report: X does favorite (should be download), RB does favorite toggle (should be Start)
-			// This suggests: their X (bit 2) maps to our Y (bit 3), their RB (bit 5) maps to our Start (bit 7)
-			// So their layout is: A=0, B=1, Y=2, X=3, LB=4, Start=5, Back=6, RB=7
-			// We need to swap: bit 2 <-> bit 3 (X and Y), and bit 5 <-> bit 7 (RB and Start)
-			remapped := buttons
-			// Clear bits 2, 3, 5, 7
-			remapped &^= 0x00AC  // Clear bits 2, 3, 5, 7 (0b10101100)
-			// Swap X (bit 2) and Y (bit 3)
-			if buttons&0x04 != 0 { remapped |= 0x08 } // bit 2 -> bit 3
-			if buttons&0x08 != 0 { remapped |= 0x04 } // bit 3 -> bit 2
-			// Swap RB (bit 5) and Start (bit 7)
-			if buttons&0x20 != 0 { remapped |= 0x80 } // bit 5 -> bit 7
-			if buttons&0x80 != 0 { remapped |= 0x20 } // bit 7 -> bit 5
-			buttons = remapped
-		}
 
 		// Check for new button presses
 		justPressed := buttons &^ lastButtons
@@ -1659,12 +1774,12 @@ func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 
 	// Build args
 	args := []string{}
-	
+
 	// For flatpak, add "run" and the app ID first
 	if isFlatpak {
 		args = append(args, "run", flatpakAppID)
 	}
-	
+
 	for _, arg := range emuArgs {
 		if strings.Contains(arg, "/") || strings.Contains(arg, "\\") {
 			// Resolve platform-specific core paths
@@ -1673,7 +1788,19 @@ func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 			if filepath.IsAbs(resolvedArg) {
 				args = append(args, resolvedArg)
 			} else {
-				args = append(args, filepath.Join(emuDir, resolvedArg))
+				resolvedPath := filepath.Join(emuDir, resolvedArg)
+
+				// On Linux, verify core file exists
+				if runtime.GOOS == "linux" && strings.HasSuffix(strings.ToLower(resolvedPath), ".so") {
+					if !fileExists(resolvedPath) {
+						logDebug("ERROR: Core file not found: %s", resolvedPath)
+						a.statusBar.SetText(fmt.Sprintf("Core not found: %s", filepath.Base(resolvedPath)))
+						return
+					}
+					logDebug("Core file found: %s", resolvedPath)
+				}
+
+				args = append(args, resolvedPath)
 			}
 		} else {
 			args = append(args, arg)
@@ -1683,15 +1810,43 @@ func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 
 	// Log launch command for debugging
 	logDebug("Launch command: %s %v", emuPath, args)
+	logDebug("Working directory: %s", emuDir)
+	logDebug("ROM path: %s", romPath)
 
 	cmd := exec.Command(emuPath, args...)
 	if !isFlatpak {
 		cmd.Dir = emuDir
 	}
 
+	// On Linux, set environment variables to fix AppImage compatibility
+	if runtime.GOOS == "linux" {
+		// Force SDL to use X11 instead of Wayland (fixes EGL symbol errors)
+		cmd.Env = append(os.Environ(),
+			"SDL_VIDEODRIVER=x11",
+			"QT_QPA_PLATFORM=xcb",
+		)
+
+		// Capture stderr to debug log for troubleshooting
+		if debugLog != nil {
+			cmd.Stderr = debugLog
+			cmd.Stdout = debugLog
+		}
+	}
+
 	if err := cmd.Start(); err != nil {
+		logDebug("Failed to start: %v", err)
 		a.statusBar.SetText(fmt.Sprintf("Launch failed: %v", err))
 		return
+	}
+
+	// On Linux, check if process exits immediately (indicates error)
+	if runtime.GOOS == "linux" {
+		go func() {
+			err := cmd.Wait()
+			if err != nil {
+				logDebug("Process exited with error: %v", err)
+			}
+		}()
 	}
 
 	a.statusBar.SetText("Launched: " + game.Name)

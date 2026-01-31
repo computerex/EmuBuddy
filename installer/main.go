@@ -132,7 +132,7 @@ var emulators = []Emulator{
 		Name: "RetroArch (Multi-System)",
 		URLs: EmulatorURL{
 			Windows: "https://buildbot.libretro.com/stable/1.19.1/windows/x86_64/RetroArch.7z",
-			Linux:   "https://buildbot.libretro.com/stable/1.19.1/linux/x86_64/RetroArch.7z",
+			Linux:   "https://buildbot.libretro.com/nightly/linux/x86_64/RetroArch.7z", // Use nightly for Linux to fix Wayland compatibility
 			MacOS:   "https://buildbot.libretro.com/stable/1.19.1/apple/osx/universal/RetroArch_Metal.dmg",
 		},
 		ArchiveName: map[string]string{
@@ -160,7 +160,7 @@ var emulators = []Emulator{
 
 var retroarchCores = EmulatorURL{
 	Windows: "https://buildbot.libretro.com/stable/1.19.1/windows/x86_64/RetroArch_cores.7z",
-	Linux:   "https://buildbot.libretro.com/stable/1.19.1/linux/x86_64/RetroArch_cores.7z",
+	Linux:   "https://buildbot.libretro.com/nightly/linux/x86_64/RetroArch_cores.7z", // Use nightly for Linux to match RetroArch version
 	MacOS:   "", // macOS cores downloaded individually from nightly builds
 }
 

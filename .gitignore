@@ -37,6 +37,10 @@ launcher/gui/fyne-cross/
 *_debug.txt
 launch_debug.txt
 
+# Test files
+test-roms/
+emulator-test-report.txt
+
 # Go build artifacts
 *.test
 *.out

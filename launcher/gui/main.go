@@ -560,8 +560,8 @@ func launchROMHeadless(systemID string, romPath string) {
 		if extractedPath != "" {
 			actualRomPath = extractedPath
 			fmt.Printf("[DEBUG] Extracted to: %s\n", actualRomPath)
-			// Optionally remove the zip after extraction
-			// os.Remove(romPath)
+			// Remove the zip after extraction to save space
+			os.Remove(romPath)
 		}
 	}
 

@@ -2150,23 +2150,173 @@ func (a *App) downloadWiiUGame(game ROM) {
 	}()
 }
 
+// Parallel download configuration
+const (
+	numDownloadWorkers = 8              // Number of parallel connections
+	minChunkSize       = 2 * 1024 * 1024 // 2MB minimum chunk size
+)
+
 func downloadWithProgress(url, outputPath string, progress func(downloaded, total int64)) error {
-	// Create optimized HTTP transport for large file downloads
+	// First, get file size and check for Range support
 	transport := &http.Transport{
-		MaxIdleConns:        10,
-		MaxIdleConnsPerHost: 10,
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
 		IdleConnTimeout:     90 * time.Second,
-		WriteBufferSize:     1024 * 1024, // 1MB
-		ReadBufferSize:      1024 * 1024, // 1MB
-		DisableCompression:  true,        // Binary files don't compress well
+		WriteBufferSize:     1024 * 1024,
+		ReadBufferSize:      1024 * 1024,
+		DisableCompression:  true,
+		ForceAttemptHTTP2:   true,
 	}
 	client := &http.Client{Transport: transport}
+
+	// HEAD request to get file info
+	headReq, err := http.NewRequest("HEAD", url, nil)
+	if err != nil {
+		return err
+	}
+	headReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 	
+	headResp, err := client.Do(headReq)
+	if err != nil {
+		return err
+	}
+	headResp.Body.Close()
+
+	totalSize := headResp.ContentLength
+	supportsRange := headResp.Header.Get("Accept-Ranges") == "bytes"
+
+	// Use parallel download for large files that support Range requests
+	if supportsRange && totalSize > minChunkSize*2 {
+		return downloadParallel(client, url, outputPath, totalSize, progress)
+	}
+
+	// Fall back to single-threaded download
+	return downloadSingle(client, url, outputPath, progress)
+}
+
+func downloadParallel(client *http.Client, url, outputPath string, totalSize int64, progress func(downloaded, total int64)) error {
+	// Calculate chunk size
+	chunkSize := totalSize / int64(numDownloadWorkers)
+	if chunkSize < minChunkSize {
+		chunkSize = minChunkSize
+	}
+
+	// Create output file
+	out, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// Pre-allocate file
+	if err := out.Truncate(totalSize); err != nil {
+		return err
+	}
+
+	// Progress tracking
+	var downloadedBytes int64
+	var progressMu sync.Mutex
+	
+	updateProgress := func(n int64) {
+		progressMu.Lock()
+		downloadedBytes += n
+		current := downloadedBytes
+		progressMu.Unlock()
+		progress(current, totalSize)
+	}
+
+	// Create worker pool
+	type chunk struct {
+		start, end int64
+	}
+	chunks := make(chan chunk, numDownloadWorkers*2)
+	errChan := make(chan error, numDownloadWorkers)
+	var wg sync.WaitGroup
+
+	// Start workers
+	for i := 0; i < numDownloadWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for c := range chunks {
+				if err := downloadChunk(client, url, out, c.start, c.end, updateProgress); err != nil {
+					errChan <- err
+					return
+				}
+			}
+		}()
+	}
+
+	// Queue chunks
+	for start := int64(0); start < totalSize; start += chunkSize {
+		end := start + chunkSize - 1
+		if end >= totalSize {
+			end = totalSize - 1
+		}
+		chunks <- chunk{start, end}
+	}
+	close(chunks)
+
+	// Wait for completion
+	wg.Wait()
+	close(errChan)
+
+	// Check for errors
+	for err := range errChan {
+		if err != nil {
+			os.Remove(outputPath)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func downloadChunk(client *http.Client, url string, out *os.File, start, end int64, updateProgress func(int64)) error {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
 	}
-	// Set headers to avoid throttling
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d for range %d-%d", resp.StatusCode, start, end)
+	}
+
+	buf := make([]byte, 256*1024) // 256KB read buffer
+	pos := start
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			_, writeErr := out.WriteAt(buf[:n], pos)
+			if writeErr != nil {
+				return writeErr
+			}
+			pos += int64(n)
+			updateProgress(int64(n))
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func downloadSingle(client *http.Client, url, outputPath string, progress func(downloaded, total int64)) error {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Connection", "keep-alive")
@@ -2186,15 +2336,13 @@ func downloadWithProgress(url, outputPath string, progress func(downloaded, tota
 		return err
 	}
 	defer out.Close()
-	
-	// Use buffered writer for better disk I/O
-	bufferedOut := bufio.NewWriterSize(out, 1024*1024) // 1MB buffer
+
+	bufferedOut := bufio.NewWriterSize(out, 1024*1024)
 	defer bufferedOut.Flush()
 
 	total := resp.ContentLength
 	var downloaded int64
 
-	// Use large buffer for network reads (1MB)
 	buf := make([]byte, 1024*1024)
 	for {
 		n, err := resp.Body.Read(buf)

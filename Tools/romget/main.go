@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -116,9 +117,20 @@ func downloadFile(urlStr, outputPath string, retries int, timeout time.Duration,
 }
 
 func downloadAttempt(urlStr, outputPath string, timeout time.Duration, referer, userAgent string, quiet bool) error {
-	// Create HTTP client with timeout
+	// Create HTTP client WITHOUT total timeout - we only want connection/TLS timeout
+	// The timeout parameter will be used for transport-level timeouts, not the entire request
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   timeout,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   timeout,
+		ResponseHeaderTimeout: timeout,
+		IdleConnTimeout:       90 * time.Second,
+	}
 	client := &http.Client{
-		Timeout: timeout,
+		Transport: transport,
+		// No Timeout here - this would limit the entire request including download
 	}
 
 	// Create request with browser headers

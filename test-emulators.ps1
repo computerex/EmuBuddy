@@ -102,12 +102,61 @@ $RomJsonFiles = @{
     "tg16" = "games_1g1r_english_tg16.json"
 }
 
+# Curated test ROMs - well-known games for each system
+$CuratedTestRoms = $null
+
+function Load-CuratedRoms {
+    param([string]$BaseDir)
+    
+    $curatedFile = Join-Path $BaseDir "test-roms.json"
+    if (Test-Path $curatedFile) {
+        try {
+            $script:CuratedTestRoms = Get-Content $curatedFile -Raw | ConvertFrom-Json
+            return $true
+        } catch {
+            Write-ColorMessage "Yellow" "  Failed to load curated ROMs: $_"
+        }
+    }
+    return $false
+}
+
 function Get-TestRom {
     param(
         [string]$System,
         [string]$BaseDir
     )
 
+    # Try curated list first
+    if ($null -eq $CuratedTestRoms) {
+        Load-CuratedRoms -BaseDir $BaseDir | Out-Null
+    }
+    
+    if ($null -ne $CuratedTestRoms -and $CuratedTestRoms.PSObject.Properties.Name -contains $System) {
+        $curated = $CuratedTestRoms.$System
+        if ($curated.url -eq "local") {
+            # Local ROM - check if it exists
+            $romDir = Join-Path $BaseDir "roms\$System"
+            $romFile = Join-Path $romDir $curated.name
+            if (Test-Path $romFile) {
+                Write-ColorMessage "Green" "  Using existing local ROM: $($curated.name)"
+                return @{
+                    Name = $curated.name
+                    Url  = "local"
+                    Size = "local"
+                }
+            }
+            # Fall through to JSON search if local ROM not found
+        } else {
+            Write-ColorMessage "Green" "  Using curated ROM: $($curated.name)"
+            return @{
+                Name = $curated.name
+                Url  = $curated.url
+                Size = "curated"
+            }
+        }
+    }
+
+    # Fall back to JSON file search
     $jsonFile = Get-RomJsonFile -System $System -BaseDir $BaseDir
     if ([string]::IsNullOrEmpty($jsonFile)) {
         Write-ColorMessage "Red" "  ROM JSON not found for $System"
@@ -122,15 +171,32 @@ function Get-TestRom {
     try {
         $jsonContent = Get-Content $jsonFile -Raw | ConvertFrom-Json
 
-        # Find smallest clean ROM (skip Pirate, Proto, Beta, Unl, Sample, Demo, Test)
-        $excludePatterns = @("Pirate", "Proto", "Beta", "Unl", "Sample", "Demo", "Test", "Program", "BIOS")
+        # Find smallest clean ROM (skip non-game files)
+        $excludePatterns = @(
+            "Pirate", "Proto", "Beta", "Unl", "Sample", "Demo", "Test", "Program", "BIOS",
+            "SGB-CPU", "Enhancement Chip", "Satellaview", "BS-X", "Sufami", "Nintendo Power",
+            "Competition", "Kiosk", "Not for Resale", "Diagnostic", "Service Disc"
+        )
+        
+        # Also require minimum size (skip tiny BIOS/chip files) - at least 16KB
+        $minSize = 16 * 1KB
+        
         $cleanRom = $jsonContent | Where-Object {
             $name = $_.name
-            -not ($excludePatterns | Where-Object { $name -match $_ })
+            $size = Convert-SizeToBytes -sizeStr $_.size
+            $excluded = $excludePatterns | Where-Object { $name -match [regex]::Escape($_) }
+            (-not $excluded) -and ($size -ge $minSize)
         } | Sort-Object { Convert-SizeToBytes -sizeStr $_.size } | Select-Object -First 1
 
         if ($null -eq $cleanRom) {
-            # Fallback to first ROM
+            # Fallback to smallest ROM over 16KB
+            $cleanRom = $jsonContent | Where-Object {
+                (Convert-SizeToBytes -sizeStr $_.size) -ge $minSize
+            } | Sort-Object { Convert-SizeToBytes -sizeStr $_.size } | Select-Object -First 1
+        }
+        
+        if ($null -eq $cleanRom) {
+            # Last resort - just pick first ROM
             $cleanRom = $jsonContent | Select-Object -First 1
         }
 
@@ -196,14 +262,43 @@ function Download-Rom {
         return $romFile
     }
 
+    # Skip download for local ROMs that don't exist
+    if ($romInfo.Url -eq "local") {
+        Write-ColorMessage "Red" "  Local ROM not found: $($romInfo.Name)"
+        return $null
+    }
+
     Write-ColorMessage "Blue" "  Downloading: $($romInfo.Name) ($($romInfo.Size))"
 
+    # Use romget for downloads (handles throttling better)
+    $romgetPath = Join-Path $BaseDir "Tools\romget\romget.exe"
+    if (-not (Test-Path $romgetPath)) {
+        # Fallback to building romget
+        Write-ColorMessage "Yellow" "  Building romget..."
+        Push-Location (Join-Path $BaseDir "Tools\romget")
+        & go build -o romget.exe . 2>&1 | Out-Null
+        Pop-Location
+    }
+
     try {
-        $ProgressPreference = 'SilentlyContinue'
-        Invoke-WebRequest -Uri $romInfo.Url -OutFile $romFile -UseBasicParsing
-        $ProgressPreference = 'Continue'
-        Write-ColorMessage "Green" "  Downloaded successfully"
-        return $romFile
+        if (Test-Path $romgetPath) {
+            $result = & $romgetPath -url $romInfo.Url -o $romFile 2>&1
+            if ($LASTEXITCODE -eq 0 -and (Test-Path $romFile)) {
+                Write-ColorMessage "Green" "  Downloaded successfully"
+                return $romFile
+            } else {
+                Write-ColorMessage "Red" "  Download failed: $result"
+                Remove-Item -Path $romFile -Force -ErrorAction SilentlyContinue
+                return $null
+            }
+        } else {
+            # Fallback to Invoke-WebRequest if romget not available
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -Uri $romInfo.Url -OutFile $romFile -UseBasicParsing
+            $ProgressPreference = 'Continue'
+            Write-ColorMessage "Green" "  Downloaded successfully"
+            return $romFile
+        }
     }
     catch {
         Write-ColorMessage "Red" "  Download failed: $_"
@@ -216,7 +311,8 @@ function Test-Emulator {
     param(
         [string]$System,
         [string]$RomPath,
-        [string]$BaseDir
+        [string]$BaseDir,
+        [int]$TimeoutSeconds = 5
     )
 
     Write-ColorMessage "Cyan" "`n[Testing $System]"
@@ -240,28 +336,67 @@ function Test-Emulator {
 
     Write-ColorMessage "Yellow" "  Launching with EmuBuddy launcher..."
     Write-ColorMessage "Yellow" "  Command: $launcherPath --launch $System $RomPath"
-    Write-ColorMessage "Yellow" "  (Close the emulator when you've verified it works)"
+    Write-ColorMessage "Yellow" "  (Emulator will auto-close after $TimeoutSeconds seconds)"
 
     try {
-        # Use direct command invocation to ensure arguments pass correctly
+        # Launch the launcher (which starts the emulator)
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $launcherPath
         $psi.Arguments = "--launch `"$System`" `"$RomPath`""
         $psi.UseShellExecute = $false
         $psi.RedirectStandardOutput = $true
         $psi.RedirectStandardError = $true
-        $psi.CreateNoWindow = $false  # Allow console window for debugging
+        $psi.CreateNoWindow = $false
 
-        $process = [System.Diagnostics.Process]::Start($psi)
+        $launcherProcess = [System.Diagnostics.Process]::Start($psi)
 
-        # Capture output for debugging
-        $output = $process.StandardOutput.ReadToEnd()
-        $error = $process.StandardError.ReadToEnd()
+        # Read output
+        $output = $launcherProcess.StandardOutput.ReadToEnd()
+        $errorOutput = $launcherProcess.StandardError.ReadToEnd()
         if ($output) { Write-Host $output }
-        if ($error) { Write-Host $error -ForegroundColor Red }
+        if ($errorOutput) { Write-Host $errorOutput -ForegroundColor Red }
 
-        $process.WaitForExit()
-        $exitCode = $process.ExitCode
+        $launcherProcess.WaitForExit()
+
+        # Find and track the emulator process with retries (RetroArch, Dolphin, PCSX2, etc.)
+        # Use wildcard matching to handle case sensitivity and variations
+        $emuProcessPatterns = @("*retroarch*", "*dolphin*", "*pcsx2*", "*ppsspp*", "*cemu*", "*rpcs3*", "*duckstation*", "*melonds*", "*citra*", "*lime3ds*", "*mgba*", "*flycast*")
+        $emuProcess = $null
+        
+        # Retry up to 5 times with 500ms delay to catch slow-starting emulators
+        for ($retry = 0; $retry -lt 5 -and $null -eq $emuProcess; $retry++) {
+            Start-Sleep -Milliseconds 500
+            foreach ($pattern in $emuProcessPatterns) {
+                $procs = Get-Process | Where-Object { $_.ProcessName -like $pattern } | Select-Object -First 1
+                if ($procs) {
+                    $emuProcess = $procs
+                    Write-ColorMessage "Blue" "  Found emulator process: $($emuProcess.ProcessName) (PID: $($emuProcess.Id))"
+                    break
+                }
+            }
+        }
+
+        if ($null -eq $emuProcess) {
+            Write-ColorMessage "Yellow" "  Could not find emulator process (may have already exited or using unknown emulator)"
+        }
+
+        # Wait for timeout then kill emulator
+        Write-ColorMessage "Yellow" "  Waiting $TimeoutSeconds seconds..."
+        Start-Sleep -Seconds $TimeoutSeconds
+
+        # Kill the emulator if still running
+        if ($null -ne $emuProcess) {
+            try {
+                $stillRunning = Get-Process -Id $emuProcess.Id -ErrorAction SilentlyContinue
+                if ($stillRunning) {
+                    Write-ColorMessage "Yellow" "  Closing emulator..."
+                    Stop-Process -Id $emuProcess.Id -Force -ErrorAction SilentlyContinue
+                    Start-Sleep -Milliseconds 500
+                }
+            } catch {
+                # Process already exited
+            }
+        }
     }
     catch {
         Write-ColorMessage "Red" "  Failed to launch: $_"

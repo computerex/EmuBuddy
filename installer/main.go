@@ -618,6 +618,8 @@ func main() {
 				printWarning("Failed to extract RetroArch BIOS: " + err.Error())
 			} else {
 				printSuccess("✓ RetroArch BIOS files installed")
+				// Copy BIOS files from subfolders to main system folder for core compatibility
+				copyBIOSFilesToSystemFolder(biosDir)
 			}
 		}
 	} else {
@@ -1536,6 +1538,156 @@ SearchDirectory = bios
 	}
 	
 	return nil
+}
+
+// copyBIOSFilesToSystemFolder copies BIOS files from system-specific subfolders
+// to the main system folder for RetroArch core compatibility
+func copyBIOSFilesToSystemFolder(systemDir string) {
+	// Map of subfolder names to the files that should be copied to the main system folder
+	// Many RetroArch cores expect BIOS files directly in the system folder
+	biosMapping := map[string][]string{
+		// PlayStation - SwanStation, Beetle PSX, PCSX ReARMed
+		"Sony - PlayStation": {
+			"scph5500.bin", "scph5501.bin", "scph5502.bin", // Essential PS1 BIOS (JP, US, EU)
+			"scph1001.bin", "scph7001.bin", "scph101.bin",  // Alternative BIOS versions
+		},
+		// Sega CD / Mega CD - Genesis Plus GX, PicoDrive
+		"Sega - Mega CD - Sega CD": {
+			"bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin", // Sega CD BIOS (US, EU, JP)
+		},
+		// Sega Saturn - Beetle Saturn, Yabause
+		"Sega - Saturn": {
+			"sega_101.bin", "mpr-17933.bin", // Saturn BIOS (US/EU, JP)
+			"saturn_bios.bin",               // Generic name some cores use
+		},
+		// Sega Dreamcast - Flycast
+		"Sega - Dreamcast": {
+			"dc_boot.bin", "dc_flash.bin", // Dreamcast BIOS and flash
+		},
+		// Also check the "dc" folder (common alternate location)
+		"dc": {
+			"dc_boot.bin", "dc_flash.bin",
+		},
+		// NEC PC Engine CD / TurboGrafx-CD - Beetle PCE
+		"NEC - PC Engine - TurboGrafx 16 - SuperGrafx": {
+			"syscard3.pce", "syscard2.pce", "syscard1.pce", // System Card BIOS
+			"gexpress.pce", // Game Express CD Card
+		},
+		// NEC PC-FX
+		"NEC - PC-FX": {
+			"pcfx.rom", "pcfxbios.bin",
+		},
+		// Atari Lynx - Handy, Beetle Lynx
+		"Atari - Lynx": {
+			"lynxboot.img",
+		},
+		// Atari 5200
+		"Atari - 5200": {
+			"5200.rom", "ATARIXL.ROM",
+		},
+		// Atari 7800
+		"Atari - 7800": {
+			"7800 BIOS (U).rom", "7800 BIOS (E).rom",
+		},
+		// ColecoVision - blueMSX, Gearcoleco
+		"Coleco - ColecoVision": {
+			"colecovision.rom", "coleco.rom",
+		},
+		// Intellivision - FreeIntv
+		"Mattel - Intellivision": {
+			"exec.bin", "grom.bin",
+		},
+		// MSX - blueMSX, fMSX
+		"Microsoft - MSX": {
+			"MSX.ROM", "MSX2.ROM", "MSX2EXT.ROM", "MSX2P.ROM", "MSX2PEXT.ROM",
+			"DISK.ROM", "FMPAC.ROM", "MSXDOS2.ROM", "KANJI.ROM",
+		},
+		// Nintendo Famicom Disk System
+		"Nintendo - Famicom Disk System": {
+			"disksys.rom",
+		},
+		// Nintendo Game Boy Advance - mGBA, VBA-M
+		"Nintendo - Game Boy Advance": {
+			"gba_bios.bin",
+		},
+		// Nintendo Game Boy / Color
+		"Nintendo - Gameboy": {
+			"gb_bios.bin", "dmg_boot.bin",
+		},
+		"Nintendo - Gameboy Color": {
+			"gbc_bios.bin", "cgb_boot.bin",
+		},
+		// Nintendo DS - DeSmuME, melonDS
+		"Nintendo - Nintendo DS": {
+			"bios7.bin", "bios9.bin", "firmware.bin",
+		},
+		// Nintendo Super Game Boy
+		"Nintendo - Super Game Boy": {
+			"sgb_bios.bin", "SGB1.sfc", "SGB2.sfc",
+		},
+		// SNK Neo Geo CD
+		"SNK - NeoGeo CD": {
+			"neocd_f.rom", "neocd_sf.rom", "neocd_t.rom", "neocd_st.rom",
+			"neocd_z.rom", "neocd.bin", "uni-bioscd.rom",
+		},
+		// 3DO
+		"3DO Company, The - 3DO": {
+			"panafz1.bin", "panafz10.bin", "panafz10-norsa.bin",
+			"goldstar.bin", "sanyotry.bin", "3do_arcade_saot.bin",
+		},
+		// Magnavox Odyssey2 / Philips Videopac
+		"Magnavox - Odyssey2": {
+			"o2rom.bin",
+		},
+		"Phillips - Videopac+": {
+			"c52.bin", "g7400.bin",
+		},
+		// Sharp X68000
+		"Sharp - X68000": {
+			"iplrom.dat", "cgrom.dat",
+		},
+		// Commodore Amiga - PUAE
+		"Commodore - Amiga": {
+			"kick34005.A500", "kick40063.A600", "kick40068.A1200",
+			"kick33180.A500", "kick37175.A500",
+		},
+		// PSP - PPSSPP (needs specific folder structure but also check here)
+		"Sony - PlayStation Portable": {
+			"ppge_atlas.zim",
+		},
+	}
+
+	totalCopied := 0
+
+	for subfolderName, biosFiles := range biosMapping {
+		subfolderPath := filepath.Join(systemDir, subfolderName)
+		if _, err := os.Stat(subfolderPath); os.IsNotExist(err) {
+			continue // Subfolder doesn't exist
+		}
+
+		for _, biosFile := range biosFiles {
+			srcPath := filepath.Join(subfolderPath, biosFile)
+			dstPath := filepath.Join(systemDir, biosFile)
+
+			// Skip if source doesn't exist
+			if _, err := os.Stat(srcPath); os.IsNotExist(err) {
+				continue
+			}
+			// Skip if destination already exists
+			if _, err := os.Stat(dstPath); err == nil {
+				continue
+			}
+
+			// Copy the file
+			if err := copyFile(srcPath, dstPath); err == nil {
+				totalCopied++
+			}
+		}
+	}
+
+	if totalCopied > 0 {
+		printInfo(fmt.Sprintf("Copied %d BIOS files to system folder for core compatibility", totalCopied))
+	}
 }
 
 // configureRetroArch sets up RetroArch to use the provided system/BIOS directory

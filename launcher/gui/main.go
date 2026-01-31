@@ -103,8 +103,30 @@ type ROM struct {
 }
 
 type CoreConfig struct {
-	Name string `json:"name"`
-	Dll  string `json:"dll"`
+	Name   string `json:"name"`
+	Dll    string `json:"dll"`              // Windows .dll (also used as fallback)
+	So     string `json:"so,omitempty"`     // Linux .so override
+	Dylib  string `json:"dylib,omitempty"`  // macOS .dylib override
+}
+
+// GetCorePath returns the appropriate core path for the current OS
+func (c *CoreConfig) GetCorePath() string {
+	switch runtime.GOOS {
+	case "linux":
+		if c.So != "" {
+			return c.So
+		}
+		// Auto-convert from dll
+		return strings.TrimSuffix(c.Dll, ".dll") + ".so"
+	case "darwin":
+		if c.Dylib != "" {
+			return c.Dylib
+		}
+		// Auto-convert from dll
+		return strings.TrimSuffix(c.Dll, ".dll") + ".dylib"
+	default:
+		return c.Dll
+	}
 }
 
 type EmulatorConfig struct {
@@ -489,6 +511,9 @@ func runSetupAndExit() {
 
 // launchROMHeadless launches a ROM without showing the GUI
 func launchROMHeadless(systemID string, romPath string) {
+	fmt.Printf("[DEBUG] Headless launch requested: system=%s, rom=%s\n", systemID, romPath)
+	fmt.Printf("[DEBUG] Base directory: %s\n", baseDir)
+
 	config, exists := systems[systemID]
 	if !exists {
 		fmt.Printf("Error: Unknown system '%s'\n", systemID)
@@ -507,9 +532,36 @@ func launchROMHeadless(systemID string, romPath string) {
 		os.Exit(1)
 	}
 
+	// Convert to absolute path for emulators that don't handle relative paths well
+	if !filepath.IsAbs(romPath) {
+		absPath, err := filepath.Abs(romPath)
+		if err == nil {
+			romPath = absPath
+			fmt.Printf("[DEBUG] Converted to absolute path: %s\n", romPath)
+		}
+	}
+
 	// Create a minimal game ROM struct
 	game := ROM{
 		Name: filepath.Base(romPath),
+	}
+
+	// Handle extraction if needed (for systems like Dolphin that can't read zips)
+	actualRomPath := romPath
+	if config.NeedsExtract && strings.HasSuffix(strings.ToLower(romPath), ".zip") {
+		fmt.Printf("[DEBUG] System requires extraction, extracting ZIP...\n")
+		romDir := filepath.Dir(romPath)
+		extractedPath, err := extractZip(romPath, romDir)
+		if err != nil {
+			fmt.Printf("Error extracting ROM: %v\n", err)
+			os.Exit(1)
+		}
+		if extractedPath != "" {
+			actualRomPath = extractedPath
+			fmt.Printf("[DEBUG] Extracted to: %s\n", actualRomPath)
+			// Optionally remove the zip after extraction
+			// os.Remove(romPath)
+		}
 	}
 
 	fmt.Printf("Launching %s: %s\n", config.Name, game.Name)
@@ -519,14 +571,17 @@ func launchROMHeadless(systemID string, romPath string) {
 	var emuArgs []string
 
 	if len(config.Emulator.Cores) > 0 {
-		// Use first core
-		emuArgs = []string{"-L", config.Emulator.Cores[0].Dll}
+		// Use first core - GetCorePath() handles OS-specific paths
+		corePath := config.Emulator.Cores[0].GetCorePath()
+		emuArgs = []string{"-L", corePath}
+		fmt.Printf("[DEBUG] Using RetroArch core: %s\n", corePath)
 	} else {
 		emuArgs = config.Emulator.Args
+		fmt.Printf("[DEBUG] Using standalone emulator with args: %v\n", emuArgs)
 	}
 
 	// Launch the game (reuse existing logic)
-	launchGameHeadless(game, romPath, emuPath, emuArgs)
+	launchGameHeadless(game, actualRomPath, emuPath, emuArgs)
 }
 
 // launchGameHeadless launches a game without GUI
@@ -598,31 +653,49 @@ func launchGameHeadless(game ROM, romPath string, emuPath string, emuArgs []stri
 		)
 	}
 
-	// Capture output for debugging
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
+	// Use Start() instead of Run() so we don't wait for the emulator to exit
+	// This allows the launcher to exit immediately after launching
+	if err := cmd.Start(); err != nil {
 		fmt.Printf("Launch failed: %v\n", err)
 		os.Exit(1)
 	}
+	
+	fmt.Println("Emulator launched successfully")
 }
 
 func main() {
-	// Check if setup has been run (Emulators folder should have content)
-	if !isSetupComplete() {
-		runSetupAndExit()
-		return
+	// Print banner to confirm this version is running
+	fmt.Println("========================================")
+	fmt.Println("  EmuBuddy Launcher v2.0")
+	fmt.Println("  Headless Mode Support")
+	fmt.Println("========================================")
+
+	// Debug: Print received arguments
+	if len(os.Args) > 1 {
+		fmt.Printf("[DEBUG] Received %d arguments: %v\n", len(os.Args), os.Args)
+	} else {
+		fmt.Println("[DEBUG] No arguments received - starting GUI mode")
 	}
 
-	// Check for CLI arguments for headless ROM launch
-	if len(os.Args) >= 3 && os.Args[1] == "--launch" {
-		systemID := os.Args[2]
+	// Check for CLI arguments for headless ROM launch FIRST (before setup check)
+	// This allows testing even if setup isn't complete
+	if len(os.Args) >= 2 && os.Args[1] == "--launch" {
+		fmt.Println("[DEBUG] Headless mode activated")
+		var systemID string
 		var romPath string
+		if len(os.Args) >= 3 {
+			systemID = os.Args[2]
+		}
 		if len(os.Args) >= 4 {
 			romPath = os.Args[3]
 		}
 		launchROMHeadless(systemID, romPath)
+		return
+	}
+
+	// Check if setup has been run (Emulators folder should have content)
+	if !isSetupComplete() {
+		runSetupAndExit()
 		return
 	}
 
@@ -1599,7 +1672,7 @@ func (a *App) launchGame(game ROM) {
 		// Single option - launch directly
 		args := config.Emulator.Args
 		if len(config.Emulator.Cores) == 1 {
-			args = []string{"-L", config.Emulator.Cores[0].Dll}
+			args = []string{"-L", config.Emulator.Cores[0].GetCorePath()}
 		}
 		a.launchWithEmulator(game, config.Emulator.Path, args)
 	}
@@ -1616,7 +1689,7 @@ func (a *App) showEmulatorChoice(game ROM, config SystemConfig) {
 		for _, core := range config.Emulator.Cores {
 			a.emulatorChoices = append(a.emulatorChoices, fmt.Sprintf("RetroArch (%s)", core.Name))
 			a.emulatorPaths = append(a.emulatorPaths, config.Emulator.Path)
-			a.emulatorArgs = append(a.emulatorArgs, []string{"-L", core.Dll})
+			a.emulatorArgs = append(a.emulatorArgs, []string{"-L", core.GetCorePath()})
 		}
 	} else if config.Emulator.Path != "" {
 		// Standalone emulator (no cores)
@@ -1636,7 +1709,7 @@ func (a *App) showEmulatorChoice(game ROM, config SystemConfig) {
 			for _, core := range config.StandaloneEmulator.Cores {
 				a.emulatorChoices = append(a.emulatorChoices, fmt.Sprintf("RetroArch (%s)", core.Name))
 				a.emulatorPaths = append(a.emulatorPaths, config.StandaloneEmulator.Path)
-				a.emulatorArgs = append(a.emulatorArgs, []string{"-L", core.Dll})
+				a.emulatorArgs = append(a.emulatorArgs, []string{"-L", core.GetCorePath()})
 			}
 		} else if config.StandaloneEmulator.Path != "" {
 			// Standalone (no cores)

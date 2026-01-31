@@ -21,10 +21,29 @@ All test ROMs are **legal, open-source homebrew** projects:
 
 ## Usage
 
-### Run the full test suite:
+### Windows
+
+Run the test suite using either method:
+
+**Double-click:**
+```
+test-emulators.bat
+```
+
+**PowerShell:**
+```powershell
+.\test-emulators.ps1
+```
+
+**With custom installation directory:**
+```powershell
+.\test-emulators.ps1 -InstallDir "C:\Path\To\EmuBuddy"
+```
+
+### Linux/macOS
 
 ```bash
-cd /path/to/sheldor
+cd /path/to/emubuddy
 ./test-emulators.sh
 ```
 
@@ -46,11 +65,14 @@ The script generates:
 
 ## Report Format
 
+The script generates a detailed test report:
+
 ```
 EmuBuddy Emulator Test Report
-Generated: Fri Jan 31 03:00:00 2026
-Installation: /home/user/EmuBuddy-Linux-v1.0.0
-Platform: linux-gnu
+Generated: 2026-01-31 03:00:00
+Installation: C:\Users\User\EmuBuddy
+Platform: Windows
+PowerShell Version: 5.1.x.x
 
 =========================================
 
@@ -129,3 +151,59 @@ TEST_ROMS=(
 **"Core not found"**
 - Some RetroArch cores may not be installed
 - Run EmuBuddySetup and reinstall RetroArch cores
+
+## Windows-Specific Notes
+
+### Requirements
+- Windows 10/11 with PowerShell 5.1 or later
+- EmuBuddyLauncher.exe must be in the installation directory
+
+### Usage
+
+Run the test suite using either method:
+
+**Double-click:**
+```
+test-emulators.bat
+```
+
+**PowerShell:**
+```powershell
+.\test-emulators.ps1
+```
+
+**With custom installation directory:**
+```powershell
+.\test-emulators.ps1 -InstallDir "C:\Path\To\EmuBuddy"
+```
+
+### Permission Issues
+If you get "execution policy" errors:
+1. Right-click on `test-emulators.bat` and select "Run as Administrator", OR
+2. Run PowerShell as Administrator and execute:
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+
+### Test Results Location
+- Report is saved to: `emulator-test-report.txt` in the EmuBuddy directory
+- Test ROMs are cached in: `test-roms/` subdirectory
+
+### Troubleshooting Launcher Issues
+If `EmuBuddyLauncher.exe` is not found, specify the path:
+```powershell
+.\test-emulators.ps1 -InstallDir "C:\Path\To\EmuBuddy"
+```
+
+### Tested Windows Emulators
+All 27 systems are tested on Windows:
+
+| Emulator | Windows Executable |
+|----------|-------------------|
+| RetroArch | `RetroArch\RetroArch-Win64\retroarch.exe` |
+| PCSX2 | `PCSX2\pcsx2-qt.exe` |
+| PPSSPP | `PPSSPP\PPSSPPWindows64.exe` |
+| Dolphin | `Dolphin\Dolphin-x64\Dolphin.exe` |
+| melonDS | `melonDS\melonDS.exe` |
+| Azahar | `Azahar\azahar.exe` |
+| Cemu | `Cemu\Cemu.exe` |

@@ -149,6 +149,7 @@
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
         "args": [],
         "cores": [
+          {"name": "Citra", "dll": "cores/citra_libretro.dll"},
           {"name": "Panda3DS", "dll": "cores/panda3ds_libretro.dll"}
         ],
         "name": "RetroArch"
@@ -239,9 +240,9 @@
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
         "cores": [
+          {"name": "SwanStation", "dll": "cores/swanstation_libretro.dll"},
           {"name": "Beetle PSX HW", "dll": "cores/mednafen_psx_hw_libretro.dll"},
-          {"name": "PCSX ReARMed", "dll": "cores/pcsx_rearmed_libretro.dll"},
-          {"name": "SwanStation", "dll": "cores/swanstation_libretro.dll"}
+          {"name": "PCSX ReARMed", "dll": "cores/pcsx_rearmed_libretro.dll"}
         ],
         "name": "RetroArch"
       },
@@ -452,8 +453,8 @@
       "emulator": {
         "path": "Emulators/RetroArch/RetroArch-Win64/retroarch.exe",
         "cores": [
-          {"name": "blueMSX", "dll": "cores/bluemsx_libretro.dll"},
-          {"name": "Gearcoleco", "dll": "cores/gearcoleco_libretro.dll"}
+          {"name": "Gearcoleco", "dll": "cores/gearcoleco_libretro.dll"},
+          {"name": "blueMSX", "dll": "cores/bluemsx_libretro.dll"}
         ],
         "name": "RetroArch"
       },

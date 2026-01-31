@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(./build-launcher.bat:*)",
-      "Bash(./build-setup.bat)"
+      "Bash(./build-setup.bat)",
+      "Bash(./dist-windows-linux.bat:*)",
+      "Bash(go build:*)",
+      "Bash(./EmuBuddyLauncher.exe:*)"
     ]
   }
 }

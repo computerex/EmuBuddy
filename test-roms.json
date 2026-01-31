@@ -1,0 +1,115 @@
+{
+  "nes": {
+    "name": "Super Mario Bros. (World).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Nintendo%20Entertainment%20System%20%28Headered%29/Super%20Mario%20Bros.%20%28World%29.zip"
+  },
+  "snes": {
+    "name": "Super Mario All-Stars + Super Mario World (USA).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Super%20Mario%20All-Stars%20%2B%20Super%20Mario%20World%20%28USA%29.zip"
+  },
+  "n64": {
+    "name": "Mario Kart 64 (USA) (LodgeNet).zip",
+    "url": "local"
+  },
+  "gb": {
+    "name": "Tetris (World) (Rev 1).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy/Tetris%20%28World%29%20%28Rev%201%29.zip"
+  },
+  "gbc": {
+    "name": "Pokemon - Crystal Version (USA, Europe) (Rev 1).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy%20Color/Pokemon%20-%20Crystal%20Version%20%28USA%2C%20Europe%29%20%28Rev%201%29.zip"
+  },
+  "gba": {
+    "name": "Pokemon - Emerald Version (USA, Europe).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy%20Advance/Pokemon%20-%20Emerald%20Version%20%28USA%2C%20Europe%29.zip"
+  },
+  "ds": {
+    "name": "Pokemon - White Version (USA, Europe) (NDSi Enhanced).nds",
+    "url": "local"
+  },
+  "3ds": {
+    "name": "Super Mario 3D Land (USA) (En,Fr,Es) (Rev 1).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Nintendo%203DS%20%28Decrypted%29/Super%20Mario%203D%20Land%20%28USA%29%20%28En%2CFr%2CEs%29%20%28Rev%201%29.zip"
+  },
+  "gc": {
+    "name": "Super Smash Bros. Melee (USA) (En,Ja) (Rev 2).zip",
+    "url": "https://myrient.erista.me/files/Redump/Nintendo%20-%20GameCube%20-%20NKit%20RVZ%20%5Bzstd-19-128k%5D/Super%20Smash%20Bros.%20Melee%20%28USA%29%20%28En%2CJa%29%20%28Rev%202%29.zip"
+  },
+  "wii": {
+    "name": "Wii Sports (USA) (Rev 1).zip",
+    "url": "https://myrient.erista.me/files/Redump/Nintendo%20-%20Wii%20-%20NKit%20RVZ%20%5Bzstd-19-128k%5D/Wii%20Sports%20%28USA%29%20%28Rev%201%29.zip"
+  },
+  "wiiu": {
+    "name": "Mario Kart 8 (USA)",
+    "url": "local",
+    "note": "Wii U games require special download - use existing ROM"
+  },
+  "genesis": {
+    "name": "Sonic The Hedgehog (USA, Europe).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Sega%20-%20Mega%20Drive%20-%20Genesis/Sonic%20The%20Hedgehog%20%28USA%2C%20Europe%29.zip"
+  },
+  "sms": {
+    "name": "Alex Kidd in Miracle World (USA, Europe, Brazil) (En) (Rev 1).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Sega%20-%20Master%20System%20-%20Mark%20III/Alex%20Kidd%20in%20Miracle%20World%20%28USA%2C%20Europe%2C%20Brazil%29%20%28En%29%20%28Rev%201%29.zip"
+  },
+  "gamegear": {
+    "name": "Sonic The Hedgehog (Japan, USA) (En).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Sega%20-%20Game%20Gear/Sonic%20The%20Hedgehog%20%28Japan%2C%20USA%29%20%28En%29.zip"
+  },
+  "dreamcast": {
+    "name": "Sonic Adventure (USA).chd",
+    "url": "https://myrient.erista.me/files/Internet%20Archive/chadmaster/dc-chd-zstd-redump/dc-chd-zstd/Sonic%20Adventure%20%28USA%29.chd"
+  },
+  "psp": {
+    "name": "God of War - Chains of Olympus (USA).iso",
+    "url": "https://myrient.erista.me/files/Redump/Sony%20-%20PlayStation%20Portable/God%20of%20War%20-%20Chains%20of%20Olympus%20%28USA%29.zip"
+  },
+  "ps1": {
+    "name": "Crash Bandicoot (USA).zip",
+    "url": "https://myrient.erista.me/files/Redump/Sony%20-%20PlayStation/Crash%20Bandicoot%20%28USA%29.zip"
+  },
+  "ps2": {
+    "name": "Super Bust-A-Move (USA).zip",
+    "url": "https://myrient.erista.me/files/Redump/Sony%20-%20PlayStation%202/Super%20Bust-A-Move%20%28USA%29.zip"
+  },
+  "atari2600": {
+    "name": "Pac-Man (USA).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Atari%20-%20Atari%202600/Pac-Man%20%28USA%29.zip"
+  },
+  "atari7800": {
+    "name": "Ms. Pac-Man (USA).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Atari%20-%20Atari%207800%20%28BIN%29/Ms.%20Pac-Man%20%28USA%29.zip"
+  },
+  "lynx": {
+    "name": "Awesome Golf (World) (Atari Lynx Collection 1) (Unl).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Atari%20-%20Atari%20Lynx%20%28LNX%29/Awesome%20Golf%20%28World%29%20%28Atari%20Lynx%20Collection%201%29%20%28Unl%29.zip"
+  },
+  "ngpc": {
+    "name": "SNK vs. Capcom - The Match of the Millennium (World) (En,Ja).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/SNK%20-%20NeoGeo%20Pocket%20Color/SNK%20vs.%20Capcom%20-%20The%20Match%20of%20the%20Millennium%20%28World%29%20%28En%2CJa%29.zip"
+  },
+  "wonderswan": {
+    "name": "Chocobo no Fushigi na Dungeon for WonderSwan (Japan) (Rev 3).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Bandai%20-%20WonderSwan/Chocobo%20no%20Fushigi%20na%20Dungeon%20for%20WonderSwan%20%28Japan%29%20%28Rev%203%29.zip"
+  },
+  "wonderswancolor": {
+    "name": "Final Fantasy (Japan).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Bandai%20-%20WonderSwan%20Color/Final%20Fantasy%20%28Japan%29.zip"
+  },
+  "coleco": {
+    "name": "Donkey Kong (USA).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Coleco%20-%20ColecoVision/Donkey%20Kong%20%28USA%29.zip"
+  },
+  "intellivision": {
+    "name": "Astrosmash (USA, Europe).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Mattel%20-%20Intellivision/Astrosmash%20%28USA%2C%20Europe%29.zip"
+  },
+  "virtualboy": {
+    "name": "Mario's Tennis (Japan, USA) (En).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Virtual%20Boy/Mario%27s%20Tennis%20%28Japan%2C%20USA%29%20%28En%29.zip"
+  },
+  "tg16": {
+    "name": "Bonk's Adventure (USA).zip",
+    "url": "https://myrient.erista.me/files/No-Intro/NEC%20-%20PC%20Engine%20-%20TurboGrafx-16/Bonk%27s%20Adventure%20%28USA%29.zip"
+  }
+}

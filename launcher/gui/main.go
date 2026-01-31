@@ -846,17 +846,26 @@ func (a *App) pollController() {
 	const fastScrollThreshold = 500 * time.Millisecond
 	const deadzone = 10000
 
+	// Log controller info once
+	logDebug("Controller connected: %d axes, %d buttons", js.AxisCount(), js.ButtonCount())
+
 	for {
 		time.Sleep(16 * time.Millisecond) // ~60fps polling
 
 		// Only process controller input when EmuBuddy window is focused
-		if !isWindowFocused("EmuBuddy") {
+		// Temporarily disabled on macOS for debugging lag issues
+		if runtime.GOOS != "darwin" && !isWindowFocused("EmuBuddy") {
 			continue
 		}
 
 		state, err := js.Read()
 		if err != nil {
 			continue
+		}
+
+		// Debug: Log button presses and axis movements
+		if state.Buttons != lastButtons {
+			logDebug("Buttons changed: 0x%08X (was 0x%08X)", state.Buttons, lastButtons)
 		}
 
 		// Skip if dialog is open
@@ -871,21 +880,48 @@ func (a *App) pollController() {
 		leftY := 0
 		// Right stick Y axis (axis 3 on most controllers) - controls game list
 		rightY := 0
-		
+
 		if len(state.AxisData) >= 2 {
-			if state.AxisData[1] > deadzone {
+			// Invert Y axis for macOS (positive = down, we want down to scroll down)
+			axisValue := state.AxisData[1]
+			if runtime.GOOS == "darwin" {
+				axisValue = -axisValue
+			}
+			if axisValue > deadzone {
 				leftY = 1
-			} else if state.AxisData[1] < -deadzone {
+			} else if axisValue < -deadzone {
 				leftY = -1
 			}
 		}
-		
+
 		if len(state.AxisData) >= 4 {
-			if state.AxisData[3] > deadzone {
+			// Invert Y axis for macOS
+			axisValue := state.AxisData[3]
+			if runtime.GOOS == "darwin" {
+				axisValue = -axisValue
+			}
+			if axisValue > deadzone {
 				rightY = 1
-			} else if state.AxisData[3] < -deadzone {
+			} else if axisValue < -deadzone {
 				rightY = -1
 			}
+		}
+
+		// Remap buttons for macOS (buttons are at different bit positions)
+		if runtime.GOOS == "darwin" {
+			// macOS button mapping (observed from Xbox controller):
+			// bit 11 (0x0800) -> A (bit 0)
+			// bit 12 (0x1000) -> B (bit 1)
+			// bit 13 (0x2000) -> X (bit 2)
+			// bit 14 (0x4000) -> Y (bit 3)
+			remapped := uint32(0)
+			if buttons&0x0800 != 0 { remapped |= 0x0001 } // A
+			if buttons&0x1000 != 0 { remapped |= 0x0002 } // B
+			if buttons&0x2000 != 0 { remapped |= 0x0004 } // X
+			if buttons&0x4000 != 0 { remapped |= 0x0008 } // Y
+			// Keep other bits as-is (Start, Select, etc.)
+			remapped |= buttons & 0xFFFF00FF
+			buttons = remapped
 		}
 
 		// Check for new button presses

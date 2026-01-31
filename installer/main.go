@@ -146,12 +146,12 @@ var emulators = []Emulator{
 		Name: "Cemu (Wii U)",
 		URLs: EmulatorURL{
 			Windows: "https://github.com/cemu-project/Cemu/releases/download/v2.6/cemu-2.6-windows-x64.zip",
-			Linux:   "https://github.com/cemu-project/Cemu/releases/download/v2.6/cemu-2.6-ubuntu-22.04-x64.AppImage",
+			Linux:   "https://github.com/cemu-project/Cemu/releases/download/v2.6/Cemu-2.6-x86_64.AppImage",
 			MacOS:   "https://github.com/cemu-project/Cemu/releases/download/v2.6/cemu-2.6-macos-12-x64.dmg",
 		},
 		ArchiveName: map[string]string{
 			"windows": "cemu.zip",
-			"linux":   "cemu.AppImage",
+			"linux":   "Cemu.AppImage",
 			"darwin":  "cemu.dmg",
 		},
 		ExtractDir: "Cemu",

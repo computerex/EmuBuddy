@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -21,6 +22,8 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/0xcafed00d/joystick"
+
+	"github.com/emubuddy/gui/wiiu"
 )
 
 // Debug logging
@@ -91,10 +94,12 @@ func (t *TappableListItem) Tapped(e *fyne.PointEvent) {
 func (t *TappableListItem) TappedSecondary(e *fyne.PointEvent) {}
 
 type ROM struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-	Size string `json:"size"`
-	Date string `json:"date"`
+	Name    string `json:"name"`
+	URL     string `json:"url"`
+	Size    string `json:"size"`
+	Date    string `json:"date"`
+	TitleID string `json:"titleId,omitempty"` // For Wii U games
+	Region  string `json:"region,omitempty"`  // For Wii U games
 }
 
 type CoreConfig struct {
@@ -119,6 +124,7 @@ type SystemConfig struct {
 	StandaloneEmulator *EmulatorConfig `json:"standaloneEmulator"`
 	FileExtensions     []string        `json:"fileExtensions"`
 	NeedsExtract       bool            `json:"needsExtract"`
+	SpecialDownload    string          `json:"specialDownload,omitempty"`
 }
 
 type SystemsConfig struct {
@@ -1225,6 +1231,9 @@ func (a *App) selectSystem(sysID string) {
 	a.currentSystem = sysID
 	config := systems[sysID]
 
+	// Clear existing games before loading new ones
+	a.allGames = nil
+	
 	// Load ROM JSON
 	jsonFile := filepath.Join(baseDir, "1g1rsets", config.RomJsonFile)
 	
@@ -1258,6 +1267,13 @@ func (a *App) selectSystem(sysID string) {
 	
 	if logFile != nil {
 		logFile.WriteString(fmt.Sprintf("[%s] Loaded %d games\n", time.Now().Format("15:04:05"), len(a.allGames)))
+		// Debug: log first few games with TitleID for Wii U
+		for i, game := range a.allGames {
+			if i < 5 {
+				logFile.WriteString(fmt.Sprintf("[%s] Game[%d]: Name=%s, TitleID=%s, URL=%s\n", 
+					time.Now().Format("15:04:05"), i, game.Name, game.TitleID, game.URL))
+			}
+		}
 	}
 
 	// Build ROM cache
@@ -1276,26 +1292,51 @@ func (a *App) buildROMCache() {
 	}
 
 	existingFiles := make(map[string]bool)
+	existingDirs := make(map[string]bool)
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if entry.IsDir() {
+			existingDirs[strings.ToLower(entry.Name())] = true
+		} else {
 			existingFiles[strings.ToLower(entry.Name())] = true
 		}
 	}
 
 	for _, game := range a.allGames {
 		exists := false
-		baseName := strings.TrimSuffix(game.Name, ".zip")
-
-		for _, ext := range config.FileExtensions {
-			if existingFiles[strings.ToLower(baseName+ext)] {
-				exists = true
-				break
+		
+		// For Wii U games, check for directory with sanitized name
+		if config.SpecialDownload == "wiiu" {
+			sanitizedName := strings.Map(func(r rune) rune {
+				if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' {
+					return '_'
+				}
+				return r
+			}, game.Name)
+			if existingDirs[strings.ToLower(sanitizedName)] {
+				// Check if the directory has content (code or meta folder)
+				gamePath := filepath.Join(romDir, sanitizedName)
+				codePath := filepath.Join(gamePath, "code")
+				metaPath := filepath.Join(gamePath, "meta")
+				if _, err := os.Stat(codePath); err == nil {
+					exists = true
+				} else if _, err := os.Stat(metaPath); err == nil {
+					exists = true
+				}
 			}
-		}
+		} else {
+			baseName := strings.TrimSuffix(game.Name, ".zip")
 
-		if !exists && !config.NeedsExtract {
-			if existingFiles[strings.ToLower(game.Name)] {
-				exists = true
+			for _, ext := range config.FileExtensions {
+				if existingFiles[strings.ToLower(baseName+ext)] {
+					exists = true
+					break
+				}
+			}
+
+			if !exists && !config.NeedsExtract {
+				if existingFiles[strings.ToLower(game.Name)] {
+					exists = true
+				}
 			}
 		}
 
@@ -1557,7 +1598,28 @@ func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 
 	// Find ROM file
 	var romPath string
-	if config.NeedsExtract {
+	
+	// For Wii U games, the ROM is a directory
+	if config.SpecialDownload == "wiiu" {
+		sanitizedName := strings.Map(func(r rune) rune {
+			if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' {
+				return '_'
+			}
+			return r
+		}, game.Name)
+		romPath = filepath.Join(romDir, sanitizedName)
+		
+		// For Cemu, we need to point to the rpx file in the code folder
+		rpxPath := filepath.Join(romPath, "code")
+		if entries, err := os.ReadDir(rpxPath); err == nil {
+			for _, entry := range entries {
+				if strings.HasSuffix(strings.ToLower(entry.Name()), ".rpx") {
+					romPath = filepath.Join(rpxPath, entry.Name())
+					break
+				}
+			}
+		}
+	} else if config.NeedsExtract {
 		baseName := strings.TrimSuffix(game.Name, ".zip")
 		for _, ext := range config.FileExtensions {
 			testPath := filepath.Join(romDir, baseName+ext)
@@ -1640,6 +1702,20 @@ func (a *App) downloadGame(game ROM) {
 	romDir := filepath.Join(romsDir, config.Dir)
 	os.MkdirAll(romDir, 0755)
 
+	// Debug logging
+	debugLog, _ := os.OpenFile(filepath.Join(baseDir, "launcher_debug.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if debugLog != nil {
+		debugLog.WriteString(fmt.Sprintf("[%s] downloadGame: Name=%s, TitleID=%s, SpecialDownload=%s\n", 
+			time.Now().Format("15:04:05"), game.Name, game.TitleID, config.SpecialDownload))
+		debugLog.Close()
+	}
+
+	// Handle Wii U special download
+	if config.SpecialDownload == "wiiu" && game.TitleID != "" {
+		a.downloadWiiUGame(game)
+		return
+	}
+
 	outputPath := filepath.Join(romDir, game.Name)
 
 	progressBar := widget.NewProgressBar()
@@ -1686,6 +1762,156 @@ func (a *App) downloadGame(game ROM) {
 			progressLabel.SetText("Extracting...")
 			extractZip(outputPath, romDir)
 			os.Remove(outputPath)
+		}
+
+		progressDialog.Hide()
+		a.romCache[game.Name] = true
+		a.gameList.Refresh()
+		a.statusBar.SetText("Downloaded: " + game.Name)
+	}()
+}
+
+// WiiUProgressReporter implements the wiiu.ProgressReporter interface
+type WiiUProgressReporter struct {
+	progressBar    *widget.ProgressBar
+	progressLabel  *widget.Label
+	downloadLabel  *widget.Label
+	gameTitle      string
+	cancelled      bool
+	downloadSize   int64
+	mu             sync.Mutex
+	fileProgress   map[string]int64
+	totalDownloaded int64
+	startTime      time.Time
+}
+
+func NewWiiUProgressReporter(progressBar *widget.ProgressBar, progressLabel, downloadLabel *widget.Label) *WiiUProgressReporter {
+	return &WiiUProgressReporter{
+		progressBar:   progressBar,
+		progressLabel: progressLabel,
+		downloadLabel: downloadLabel,
+		fileProgress:  make(map[string]int64),
+	}
+}
+
+func (r *WiiUProgressReporter) SetGameTitle(title string) {
+	r.mu.Lock()
+	r.gameTitle = title
+	r.mu.Unlock()
+}
+
+func (r *WiiUProgressReporter) UpdateDownloadProgress(downloaded int64, filename string) {
+	r.mu.Lock()
+	r.fileProgress[filename] = downloaded
+	var total int64
+	for _, v := range r.fileProgress {
+		total += v
+	}
+	r.totalDownloaded = total
+	r.mu.Unlock()
+
+	if r.downloadSize > 0 {
+		pct := float64(total) / float64(r.downloadSize)
+		r.progressBar.SetValue(pct)
+		r.progressLabel.SetText(fmt.Sprintf("%.1f MB / %.1f MB", float64(total)/1024/1024, float64(r.downloadSize)/1024/1024))
+	}
+}
+
+func (r *WiiUProgressReporter) UpdateDecryptionProgress(progress float64) {
+	r.progressBar.SetValue(progress)
+	r.progressLabel.SetText(fmt.Sprintf("Decrypting... %.0f%%", progress*100))
+}
+
+func (r *WiiUProgressReporter) Cancelled() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cancelled
+}
+
+func (r *WiiUProgressReporter) SetCancelled() {
+	r.mu.Lock()
+	r.cancelled = true
+	r.mu.Unlock()
+}
+
+func (r *WiiUProgressReporter) SetDownloadSize(size int64) {
+	r.mu.Lock()
+	r.downloadSize = size
+	r.mu.Unlock()
+}
+
+func (r *WiiUProgressReporter) ResetTotals() {
+	r.mu.Lock()
+	r.fileProgress = make(map[string]int64)
+	r.totalDownloaded = 0
+	r.mu.Unlock()
+}
+
+func (r *WiiUProgressReporter) MarkFileAsDone(filename string) {
+	// No-op for now
+}
+
+func (r *WiiUProgressReporter) SetTotalDownloadedForFile(filename string, downloaded int64) {
+	r.mu.Lock()
+	r.fileProgress[filename] = downloaded
+	r.mu.Unlock()
+}
+
+func (r *WiiUProgressReporter) SetStartTime(startTime time.Time) {
+	r.mu.Lock()
+	r.startTime = startTime
+	r.mu.Unlock()
+}
+
+func (a *App) downloadWiiUGame(game ROM) {
+	config := systems[a.currentSystem]
+	
+	// Use a sanitized directory name based on the game name
+	sanitizedName := strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' {
+			return '_'
+		}
+		return r
+	}, game.Name)
+	
+	romDir := filepath.Join(romsDir, config.Dir, sanitizedName)
+	os.MkdirAll(romDir, 0755)
+
+	progressBar := widget.NewProgressBar()
+	progressLabel := widget.NewLabel("Starting download...")
+	downloadLabel := widget.NewLabel(game.Name)
+
+	progressContent := container.NewVBox(
+		downloadLabel,
+		progressBar,
+		progressLabel,
+	)
+
+	progressDialog := dialog.NewCustom("Downloading Wii U Title", "Cancel", progressContent, a.window)
+	reporter := NewWiiUProgressReporter(progressBar, progressLabel, downloadLabel)
+
+	progressDialog.SetOnClosed(func() {
+		reporter.SetCancelled()
+	})
+	progressDialog.Show()
+
+	go func() {
+		client := &http.Client{Timeout: 0} // No timeout for large downloads
+
+		// Download and decrypt
+		progressLabel.SetText("Downloading from Nintendo CDN...")
+		err := wiiu.DownloadTitle(game.TitleID, romDir, true, reporter, true, client)
+
+		if reporter.Cancelled() {
+			os.RemoveAll(romDir)
+			return
+		}
+
+		if err != nil {
+			progressDialog.Hide()
+			dialog.ShowError(err, a.window)
+			os.RemoveAll(romDir)
+			return
 		}
 
 		progressDialog.Hide()

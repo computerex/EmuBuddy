@@ -5,6 +5,9 @@ go 1.19
 require (
 	fyne.io/fyne/v2 v2.2.0
 	github.com/0xcafed00d/joystick v1.0.1
+	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99
+	golang.org/x/crypto v0.14.0
+	golang.org/x/sync v0.5.0
 )
 
 require (

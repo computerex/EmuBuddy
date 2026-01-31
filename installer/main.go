@@ -142,6 +142,20 @@ var emulators = []Emulator{
 		},
 		ExtractDir: "RetroArch",
 	},
+	{
+		Name: "Cemu (Wii U)",
+		URLs: EmulatorURL{
+			Windows: "https://github.com/cemu-project/Cemu/releases/download/v2.6/cemu-2.6-windows-x64.zip",
+			Linux:   "https://github.com/cemu-project/Cemu/releases/download/v2.6/cemu-2.6-ubuntu-22.04-x64.AppImage",
+			MacOS:   "https://github.com/cemu-project/Cemu/releases/download/v2.6/cemu-2.6-macos-12-x64.dmg",
+		},
+		ArchiveName: map[string]string{
+			"windows": "cemu.zip",
+			"linux":   "cemu.AppImage",
+			"darwin":  "cemu.dmg",
+		},
+		ExtractDir: "Cemu",
+	},
 }
 
 var retroarchCores = EmulatorURL{
@@ -741,7 +755,7 @@ func printHeader() {
 	fmt.Println("Platform: " + platform)
 	fmt.Println()
 	fmt.Println("This installer will download and set up:")
-	fmt.Println("  • 7 Emulators (~350 MB)")
+	fmt.Println("  • 8 Emulators (~375 MB)")
 	fmt.Println("  • RetroArch Cores (~468 MB)")
 	fmt.Println("  • BIOS Files (~600 MB)")
 	fmt.Println("  • Total download: ~1.4 GB")

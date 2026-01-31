@@ -193,6 +193,22 @@
       "needsExtract": true
     },
     {
+      "id": "wiiu",
+      "name": "Wii U",
+      "dir": "wiiu",
+      "romJsonFile": "wiiu.json",
+      "libretroName": "Nintendo - Wii U",
+      "emulator": {
+        "path": "Emulators/Cemu/Cemu.exe",
+        "args": ["-g"],
+        "name": "Cemu"
+      },
+      "standaloneEmulator": null,
+      "fileExtensions": [],
+      "needsExtract": false,
+      "specialDownload": "wiiu"
+    },
+    {
       "id": "psp",
       "name": "PlayStation Portable",
       "dir": "psp",

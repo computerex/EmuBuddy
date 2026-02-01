@@ -5,6 +5,7 @@ Cross-platform emulation frontend with automated setup.
 ## Features
 
 - **One-Click Setup** — Automatically downloads and configures all emulators
+- **One-Click Downloads** — Download games directly from Myrient with a single click
 - **16+ Systems** — NES to PS2, handhelds to disc-based consoles
 - **Parallel Downloads** — Fast game downloads with multi-connection support
 - **Controller Support** — Full gamepad navigation for couch gaming

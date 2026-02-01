@@ -1,5 +1,7 @@
 # EmuBuddy
 
+![EmuBuddy](emubuddy.png)
+
 Cross-platform emulation frontend with automated setup.
 
 ## Features

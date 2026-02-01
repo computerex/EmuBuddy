@@ -12,33 +12,38 @@ import (
 var (
 	focusCache      bool
 	focusCacheMutex sync.RWMutex
-	lastFocusCheck  time.Time
-	focusCacheTTL   = 100 * time.Millisecond // Check focus 10 times per second instead of 60
+	focusCheckDone  chan struct{}
 )
 
-// isWindowFocused checks if a window with the given title is focused.
-// Uses AppleScript to get the frontmost application window title on macOS.
-// Caches the result to avoid spawning osascript processes too frequently.
+func init() {
+	focusCheckDone = make(chan struct{})
+	go focusChecker("EmuBuddy")
+}
+
+// isWindowFocused returns the cached focus status.
+// The actual check runs in a background goroutine to avoid blocking the controller loop.
 func isWindowFocused(windowTitle string) bool {
-	// Check if we have a recent cached value
 	focusCacheMutex.RLock()
-	if time.Since(lastFocusCheck) < focusCacheTTL {
-		cached := focusCache
-		focusCacheMutex.RUnlock()
-		return cached
+	defer focusCacheMutex.RUnlock()
+	return focusCache
+}
+
+// focusChecker runs in a background goroutine, checking focus every 500ms
+func focusChecker(windowTitle string) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			focused := checkWindowFocus(windowTitle)
+			focusCacheMutex.Lock()
+			focusCache = focused
+			focusCacheMutex.Unlock()
+		case <-focusCheckDone:
+			return
+		}
 	}
-	focusCacheMutex.RUnlock()
-
-	// Need to check focus
-	focused := checkWindowFocus(windowTitle)
-
-	// Update cache
-	focusCacheMutex.Lock()
-	focusCache = focused
-	lastFocusCheck = time.Now()
-	focusCacheMutex.Unlock()
-
-	return focused
 }
 
 func checkWindowFocus(windowTitle string) bool {

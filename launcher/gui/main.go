@@ -416,6 +416,9 @@ type App struct {
 	selectedSysIdx  int
 	focusOnGames    bool // true = game list focused, false = system list focused
 	dialogOpen      bool
+	disclaimerShown bool
+	disclaimerAcceptedByController bool
+	gameRunning     bool
 
 	// Emulator choice state
 	choosingEmulator    bool
@@ -446,6 +449,9 @@ type App struct {
 	mainSplit         *container.Split
 	gamePanel         *fyne.Container
 	emulatorPanel     *fyne.Container
+
+	// Disclaimer dialog reference for controller dismissal
+	disclaimerDialog  dialog.Dialog
 }
 
 // isSetupComplete checks if emulators have been installed
@@ -728,17 +734,26 @@ EmuBuddy is a game launcher and does not include any copyrighted game files.
 • Only use games that you legally own or have permission to use
 • Downloading copyrighted games without authorization is illegal in most jurisdictions
 
-By using this software, you acknowledge that you understand and accept these terms.`
+By using this software, you acknowledge that you understand and accept these terms.
+
+Press A or click "I Understand" to continue • Press B or click "Exit" to quit`
 
 	content := widget.NewLabel(disclaimerText)
 	content.Wrapping = fyne.TextWrapWord
-	
+
+	a.dialogOpen = true
+	a.disclaimerShown = true
+
 	d := dialog.NewCustomConfirm("Legal Notice", "I Understand", "Exit", content, func(accepted bool) {
-		if !accepted {
+		a.dialogOpen = false
+		a.disclaimerShown = false
+		if !accepted && !a.disclaimerAcceptedByController {
 			a.window.Close()
 		}
+		a.disclaimerAcceptedByController = false
 	}, a.window)
 	d.Resize(fyne.NewSize(500, 350))
+	a.disclaimerDialog = d
 	d.Show()
 }
 
@@ -1156,10 +1171,15 @@ func (a *App) pollController() {
 	for {
 		time.Sleep(16 * time.Millisecond) // ~60fps polling
 
-		// Only process controller input when EmuBuddy window is focused
-		if !isWindowFocused("EmuBuddy") {
+		// Skip controller input when a game is running (prevents background navigation)
+		if a.gameRunning {
 			continue
 		}
+
+		// Window focus check disabled for Steam Deck Game Mode (Gamescope breaks xdotool)
+		// if !isWindowFocused("EmuBuddy") {
+		// 	continue
+		// }
 
 		state, err := js.Read()
 		if err != nil {
@@ -1171,7 +1191,64 @@ func (a *App) pollController() {
 			logDebug("Buttons RAW: 0x%08X (was 0x%08X)", state.Buttons, lastButtons)
 		}
 
-		// Skip if dialog is open
+		// Handle disclaimer dialog with controller buttons (Steam Deck Game Mode fix)
+		if a.disclaimerShown {
+			buttons := state.Buttons
+
+			// Apply platform-specific button remapping
+			if runtime.GOOS == "darwin" {
+				remapped := uint32(0)
+				if buttons&0x0800 != 0 { remapped |= 0x0001 } // A
+				if buttons&0x1000 != 0 { remapped |= 0x0002 } // B
+				if buttons&0x2000 != 0 { remapped |= 0x0004 } // X
+				if buttons&0x4000 != 0 { remapped |= 0x0008 } // Y
+				remapped |= buttons & 0xFFFF00FF
+				buttons = remapped
+			}
+			if runtime.GOOS == "linux" {
+				originalButtons := buttons
+				remapped := uint32(0)
+				if buttons&0x0001 != 0 { remapped |= 0x0001 } // A -> A (bit 0)
+				if buttons&0x0002 != 0 { remapped |= 0x0002 } // B -> B (bit 1)
+				if buttons&0x0008 != 0 { remapped |= 0x0004 } // X -> X (bit 3 -> bit 2)
+				if buttons&0x0010 != 0 { remapped |= 0x0008 } // RB -> Y (bit 4 -> bit 3)
+				if buttons&0x0020 != 0 { remapped |= 0x0020 }
+				if buttons&0x0040 != 0 { remapped |= 0x0040 }
+				if buttons&0x0800 != 0 { remapped |= 0x0080 }
+				remapped |= buttons & 0xFFFFF700
+				buttons = remapped
+				logDebug("Disclaimer button remap: 0x%08X -> 0x%08X", originalButtons, buttons)
+			}
+
+			justPressed := buttons &^ lastButtons
+
+			// A button (bit 0) - Accept disclaimer
+			if justPressed&1 != 0 {
+				logDebug("A button pressed - accepting disclaimer")
+				a.disclaimerAcceptedByController = true
+				a.dialogOpen = false
+				a.disclaimerShown = false
+				if a.disclaimerDialog != nil {
+					a.disclaimerDialog.Hide()
+				}
+			}
+
+			// B button (bit 1) - Exit application
+			if justPressed&2 != 0 {
+				logDebug("B button pressed - exiting application")
+				a.dialogOpen = false
+				a.disclaimerShown = false
+				if a.disclaimerDialog != nil {
+					a.disclaimerDialog.Hide()
+				}
+				a.window.Close()
+			}
+
+			lastButtons = state.Buttons
+			continue
+		}
+
+		// Skip if other dialog is open
 		if a.dialogOpen {
 			lastButtons = state.Buttons
 			continue
@@ -1997,6 +2074,10 @@ func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 		return
 	}
 
+	// Disable controller input while game is running (prevents background navigation)
+	a.gameRunning = true
+	logDebug("Game launched - controller input disabled in launcher")
+
 	// On Linux, check if process exits immediately (indicates error)
 	if runtime.GOOS == "linux" {
 		go func() {
@@ -2004,6 +2085,9 @@ func (a *App) launchWithEmulator(game ROM, emuPath string, emuArgs []string) {
 			if err != nil {
 				logDebug("Process exited with error: %v", err)
 			}
+			// Re-enable controller input when game exits
+			a.gameRunning = false
+			logDebug("Game exited - controller input re-enabled in launcher")
 		}()
 	}
 

@@ -3,7 +3,8 @@
 cd /d "%~dp0launcher\gui"
 
 :: Build GUI version (no console window)
-go build -ldflags="-s -w -H windowsgui" -o ..\..\EmuBuddyLauncher.exe .
+:: Note: -linkmode=internal fixes Go 1.25+ linker incompatibility with TDM-GCC
+go build -ldflags="-s -w -H windowsgui -linkmode=internal" -o ..\..\EmuBuddyLauncher.exe .
 if %ERRORLEVEL% EQU 0 (
     echo Built EmuBuddyLauncher.exe [GUI]
 ) else (
@@ -12,7 +13,7 @@ if %ERRORLEVEL% EQU 0 (
 )
 
 :: Build console version (for testing/headless mode)
-go build -ldflags="-s -w" -o ..\..\EmuBuddyLauncher-console.exe .
+go build -ldflags="-s -w -linkmode=internal" -o ..\..\EmuBuddyLauncher-console.exe .
 if %ERRORLEVEL% EQU 0 (
     echo Built EmuBuddyLauncher-console.exe [Console/Testing]
 ) else (

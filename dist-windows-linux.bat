@@ -59,12 +59,12 @@ if %ERRORLEVEL% NEQ 0 (
 
 cd launcher\gui
 
-:: Windows native
+:: Windows native (use internal linker for Go 1.25+ compatibility)
 echo   Windows...
 set GOOS=
 set GOARCH=
 set CGO_ENABLED=
-go build -ldflags="-s -w -H windowsgui" -o ..\..\EmuBuddyLauncher.exe .
+go build -ldflags="-s -w -H windowsgui -linkmode=internal" -o ..\..\EmuBuddyLauncher.exe .
 if %ERRORLEVEL% NEQ 0 (echo   [FAILED] & goto :error)
 echo   [OK] EmuBuddyLauncher.exe
 

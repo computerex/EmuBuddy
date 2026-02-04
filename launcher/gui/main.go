@@ -43,6 +43,83 @@ func logDebug(format string, args ...interface{}) {
 	debugLog.Sync()
 }
 
+// FixedSizeWrapper wraps a widget and returns a constant MinSize
+// This prevents the wrapped widget from causing window resizes
+type FixedSizeWrapper struct {
+	widget.BaseWidget
+	content   fyne.CanvasObject
+	minWidth  float32
+	minHeight float32
+}
+
+func NewFixedSizeWrapper(content fyne.CanvasObject, minWidth, minHeight float32) *FixedSizeWrapper {
+	w := &FixedSizeWrapper{
+		content:   content,
+		minWidth:  minWidth,
+		minHeight: minHeight,
+	}
+	w.ExtendBaseWidget(w)
+	return w
+}
+
+func (w *FixedSizeWrapper) CreateRenderer() fyne.WidgetRenderer {
+	return &fixedSizeRenderer{wrapper: w}
+}
+
+func (w *FixedSizeWrapper) MinSize() fyne.Size {
+	return fyne.NewSize(w.minWidth, w.minHeight)
+}
+
+type fixedSizeRenderer struct {
+	wrapper *FixedSizeWrapper
+}
+
+func (r *fixedSizeRenderer) Destroy() {}
+
+func (r *fixedSizeRenderer) Layout(size fyne.Size) {
+	r.wrapper.content.Resize(size)
+	r.wrapper.content.Move(fyne.NewPos(0, 0))
+}
+
+func (r *fixedSizeRenderer) MinSize() fyne.Size {
+	return r.wrapper.MinSize()
+}
+
+func (r *fixedSizeRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.wrapper.content}
+}
+
+func (r *fixedSizeRenderer) Refresh() {
+	r.wrapper.content.Refresh()
+}
+
+// FixedWidthLayout creates a layout with a fixed-width left panel
+// The right panel fills the remaining space and its size changes don't affect the overall minimum
+type FixedWidthLayout struct {
+	leftWidth float32
+}
+
+func NewFixedWidthLayout(leftWidth float32) *FixedWidthLayout {
+	return &FixedWidthLayout{leftWidth: leftWidth}
+}
+
+func (l *FixedWidthLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	// Return a completely fixed minimum size - never changes regardless of content
+	return fyne.NewSize(800, 400)
+}
+
+func (l *FixedWidthLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	if len(objects) < 2 {
+		return
+	}
+	// Left panel gets fixed width
+	objects[0].Resize(fyne.NewSize(l.leftWidth, size.Height))
+	objects[0].Move(fyne.NewPos(0, 0))
+	// Right panel gets remaining space
+	objects[1].Resize(fyne.NewSize(size.Width-l.leftWidth, size.Height))
+	objects[1].Move(fyne.NewPos(l.leftWidth, 0))
+}
+
 // TappableListItem is a container that captures taps and double-taps for list items
 type TappableListItem struct {
 	widget.BaseWidget
@@ -446,9 +523,11 @@ type App struct {
 	emulatorList      *widget.List
 	emulatorSelectBtn *widget.Button
 	emulatorCancelBtn *widget.Button
-	mainSplit         *container.Split
+	mainContainer     *fyne.Container
+	systemPanel       *fyne.Container
 	gamePanel         *fyne.Container
 	emulatorPanel     *fyne.Container
+	rightPanel        *fyne.Container  // Container that holds either gamePanel or emulatorPanel
 
 	// Disclaimer dialog reference for controller dismissal
 	disclaimerDialog  dialog.Dialog
@@ -786,15 +865,20 @@ func (a *App) buildUI() {
 	}
 
 	// Game list on right - use TappableListItem for double-click support
+	// Use canvas.Text for game name to prevent MinSize changes on scroll
 	a.gameList = widget.NewList(
 		func() int { return len(a.filteredGames) },
 		func() fyne.CanvasObject {
-			nameLabel := widget.NewLabel("Game Name Here")
-			statusLabel := widget.NewLabel("Status")
-			sizeLabel := widget.NewLabel("Size")
+			// Use canvas.Text - it has fixed size and won't cause layout changes
+			nameText := canvas.NewText("Game Name", theme.ForegroundColor())
+			nameText.TextSize = 14
+			statusText := canvas.NewText("[Ready]", theme.ForegroundColor())
+			statusText.TextSize = 14
+			sizeText := canvas.NewText("999.9 MiB", theme.ForegroundColor())
+			sizeText.TextSize = 14
 			content := container.NewBorder(nil, nil, nil,
-				container.NewHBox(statusLabel, sizeLabel),
-				nameLabel,
+				container.NewHBox(statusText, sizeText),
+				nameText,
 			)
 			return NewTappableListItem(content)
 		},
@@ -809,10 +893,10 @@ func (a *App) buildUI() {
 			})
 			
 			box := tappable.Content.(*fyne.Container)
-			nameLabel := box.Objects[0].(*widget.Label)
+			nameText := box.Objects[0].(*canvas.Text)
 			rightBox := box.Objects[1].(*fyne.Container)
-			statusLabel := rightBox.Objects[0].(*widget.Label)
-			sizeLabel := rightBox.Objects[1].(*widget.Label)
+			statusText := rightBox.Objects[0].(*canvas.Text)
+			sizeText := rightBox.Objects[1].(*canvas.Text)
 
 			// Name with favorite indicator
 			name := strings.TrimSuffix(game.Name, ".zip")
@@ -823,19 +907,23 @@ func (a *App) buildUI() {
 			if a.focusOnGames && id == a.selectedGameIdx {
 				name = "> " + name
 			}
-			if len(name) > 60 {
-				name = name[:57] + "..."
+			// Truncate long names
+			if len(name) > 50 {
+				name = name[:47] + "..."
 			}
-			nameLabel.SetText(name)
+			nameText.Text = name
+			nameText.Refresh()
 
 			// Status
 			if a.romCache[game.Name] {
-				statusLabel.SetText("[Ready]")
+				statusText.Text = "[Ready]"
 			} else {
-				statusLabel.SetText("[DL]")
+				statusText.Text = "[DL]"
 			}
+			statusText.Refresh()
 
-			sizeLabel.SetText(game.Size)
+			sizeText.Text = game.Size
+			sizeText.Refresh()
 		},
 	)
 
@@ -959,9 +1047,10 @@ func (a *App) buildUI() {
 		a.emulatorList,
 	)
 
-	// Split view
-	a.mainSplit = container.NewHSplit(systemPanel, a.gamePanel)
-	a.mainSplit.SetOffset(0.2)
+	// Main layout - use custom FixedWidthLayout that returns constant MinSize
+	a.systemPanel = systemPanel
+	a.rightPanel = container.NewMax(a.gamePanel)
+	a.mainContainer = container.New(NewFixedWidthLayout(200), a.systemPanel, a.rightPanel)
 
 	// Bottom bar
 	bottomBar := container.NewBorder(nil, nil, nil, a.statusBar, a.instructions)
@@ -971,10 +1060,12 @@ func (a *App) buildUI() {
 		container.NewPadded(title),
 		bottomBar,
 		nil, nil,
-		a.mainSplit,
+		a.mainContainer,
 	)
 
-	a.window.SetContent(content)
+	// Wrap ENTIRE content in FixedSizeWrapper to block ALL size changes from reaching the window
+	fixedContent := NewFixedSizeWrapper(content, 1000, 600)
+	a.window.SetContent(fixedContent)
 
 	// Add keyboard shortcuts
 	a.window.Canvas().SetOnTypedKey(func(ke *fyne.KeyEvent) {
@@ -1891,8 +1982,8 @@ func (a *App) showEmulatorChoice(game ROM, config SystemConfig) {
 	a.choosingEmulator = true
 	
 	// Swap game panel for emulator panel
-	a.mainSplit.Trailing = a.emulatorPanel
-	a.mainSplit.Refresh()
+	a.rightPanel.Objects = []fyne.CanvasObject{a.emulatorPanel}
+	a.rightPanel.Refresh()
 	a.emulatorList.Select(0)
 	a.emulatorList.Refresh()
 	
@@ -1901,16 +1992,16 @@ func (a *App) showEmulatorChoice(game ROM, config SystemConfig) {
 
 func (a *App) cancelEmulatorChoice() {
 	a.choosingEmulator = false
-	a.mainSplit.Trailing = a.gamePanel
-	a.mainSplit.Refresh()
+	a.rightPanel.Objects = []fyne.CanvasObject{a.gamePanel}
+	a.rightPanel.Refresh()
 	a.updateStatus()
 }
 
 func (a *App) confirmEmulatorChoice() {
 	if a.selectedEmulatorIdx >= 0 && a.selectedEmulatorIdx < len(a.emulatorPaths) {
 		a.choosingEmulator = false
-		a.mainSplit.Trailing = a.gamePanel
-		a.mainSplit.Refresh()
+		a.rightPanel.Objects = []fyne.CanvasObject{a.gamePanel}
+		a.rightPanel.Refresh()
 		a.launchWithEmulator(a.pendingGame, a.emulatorPaths[a.selectedEmulatorIdx], a.emulatorArgs[a.selectedEmulatorIdx])
 	}
 }

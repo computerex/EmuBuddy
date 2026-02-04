@@ -1,0 +1,55 @@
+WEBHOOK DEBUGGING FOR STEAM DECK
+=================================
+
+This will let me see exactly what controller buttons are being pressed on your Steam Deck.
+
+SETUP INSTRUCTIONS:
+-------------------
+
+1. On your PC, go to: https://webhook.site
+   - You'll get a unique URL like: https://webhook.site/YOUR-UNIQUE-ID
+
+2. Copy that FULL URL
+
+3. On Steam Deck, create a file called: debug_webhook.txt
+   - Put it in the same folder as EmuBuddyLauncher-linux
+   - Paste your webhook URL into this file (just the URL, nothing else)
+   - Save the file
+
+4. Launch EmuBuddyLauncher-linux
+
+5. When the disclaimer appears, press this EXACT sequence:
+   - A button
+   - X button
+   - Y button
+   - B button
+   - Left stick UP
+   - Left stick DOWN
+   - Left stick LEFT
+   - Left stick RIGHT
+   - Right stick UP
+   - Right stick DOWN
+   - Right stick LEFT
+   - Right stick RIGHT
+   - LB (Left Bumper)
+   - RB (Right Bumper)
+   - LT (Left Trigger)
+   - RT (Right Trigger)
+
+6. Go back to webhook.site on your PC
+   - You'll see all the button press data
+   - Copy ALL the data and send it to me
+
+7. Then press A to accept the disclaimer and continue
+
+WHAT THIS DOES:
+---------------
+- Every button press sends data to webhook.site showing the raw button codes
+- I can see exactly what values your Steam Deck controller sends
+- This will help me fix the A/B button issue
+
+FILE LOCATIONS:
+--------------
+EmuBuddyLauncher-linux  <- The launcher
+debug_webhook.txt       <- Create this with your webhook URL
+launcher_debug.log      <- Local log file (also useful)

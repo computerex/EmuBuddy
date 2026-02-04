@@ -1,0 +1,32 @@
+ZERO-SETUP AUTOMATIC DEBUG
+===========================
+
+The launcher automatically sends debug data to me. You do NOTHING!
+
+INSTRUCTIONS:
+-------------
+
+1. Copy EmuBuddyLauncher-linux to your Steam Deck
+
+2. Launch it in Game Mode
+
+3. When disclaimer appears, press this sequence:
+   - A, X, Y, B
+   - Left stick: UP, DOWN, LEFT, RIGHT
+   - Right stick: UP, DOWN, LEFT, RIGHT
+   - LB, RB, LT, RT
+
+4. Press A to accept disclaimer
+
+5. You'll see: "Debug Data Sent - No action needed"
+
+6. That's it! I can now check the shared database and see your button data.
+
+HOW IT WORKS:
+-------------
+- All button presses are recorded while disclaimer is shown
+- When you press A, data uploads to kvdb.io (shared database)
+- I check https://kvdb.io/2Z8jQqFjkGN4HnV3oCbqxC/ periodically
+- Your data appears with timestamp
+
+You don't need to send me anything or do any setup!
